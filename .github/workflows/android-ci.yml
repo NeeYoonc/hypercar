@@ -157,9 +157,9 @@ jobs:
             exit 1
           fi
           # 允许粘贴多行 base64（Windows 复制常见），解码前先去掉换行
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > release.jks
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > release.p12
           {
-            echo "storeFile=release.jks"
+            echo "storeFile=release.p12"
             echo "storePassword=$KEYSTORE_PASSWORD"
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
