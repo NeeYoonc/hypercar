@@ -106,7 +106,7 @@ impl Session {
                 self.info = Some((text(4)?, text(14)?, text(20)?));
                 let mut request = Vec::new();
                 proto::string(&mut request, 1, &self.challenge);
-                out.push((CMD_HU_INFO, proto_hu_info_payload(&cfg.bt_address, &cfg.bt_name)));
+                out.push((CMD_HU_INFO, proto_hu_info_payload(cfg)));
                 out.push((CMD_HU_AUTHEN_REQUEST, request));
             }
             CMD_MD_AUTHEN_RESPONSE => {
@@ -507,7 +507,7 @@ mod tests {
         }
     }
     use tokio::net::TcpListener;
-    fn cfg()->CarLifeConfig {CarLifeConfig{width:1280,height:720,fps:60,navigation_updates:false,microphone:None,bt_address:"00:11:22:33:44:55".into(),bt_name:"HyperCar".into(),data_channel:true,content_encryption:true}}
+    fn cfg()->CarLifeConfig {CarLifeConfig{width:1280,height:720,fps:60,navigation_updates:false,microphone:None,bt_address:"00:11:22:33:44:55".into(),bt_name:"HyperCar".into(),data_channel:true,content_encryption:true,hu_bt_address:String::new(),hu_bt_name:String::new(),hu_manufacturer:String::new(),hu_model:String::new()}}
 
     #[tokio::test(start_paused = true)]
     async fn pause_at_canvas_deadline_prevents_reopen_and_next_port_dial() {
@@ -986,7 +986,7 @@ mod navigation_tests {
 #[cfg(test)]
 mod navigation_subscription_tests {
     use super::*;
-    fn config(enabled:bool)->CarLifeConfig {CarLifeConfig{width:1280,height:720,fps:30,navigation_updates:enabled,microphone:None,bt_address:String::new(),bt_name:String::new(),data_channel:true,content_encryption:true}}
+    fn config(enabled:bool)->CarLifeConfig {CarLifeConfig{width:1280,height:720,fps:30,navigation_updates:enabled,microphone:None,bt_address:String::new(),bt_name:String::new(),data_channel:true,content_encryption:true,hu_bt_address:String::new(),hu_bt_name:String::new(),hu_manufacturer:String::new(),hu_model:String::new()}}
     fn ready()->Session {let mut s=Session::default();s.proof_ok=true;s.admitted=true;s.ready=true;s.init_sent=true;s}
     #[test] fn capability_query_ack_then_start_only_once() {
         let mut s=ready();let c=config(true);
