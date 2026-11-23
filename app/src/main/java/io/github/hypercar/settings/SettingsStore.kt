@@ -306,10 +306,12 @@ object SettingsStore {
         get() = p().getInt(KEY_FPS, 60)
         set(v) = p().edit().putInt(KEY_FPS, v.coerceIn(20, 60)).apply()
 
-    /** 车机画面来源（2026-11-03）：
-     *  · "car_ui"   —— 本 App 自绘车机首页（当前默认，地图卡 + 音乐卡 + Dock）
-     *  · "carwith"  —— 走小米 CarWith：拉起它的 CarLife 入口，由 CarWith 自己建显示/编码，
-     *                 我们只做 CarLife 通道 → AirPlay 的转发（需装 CarWith + 小米版 CarLife）
+    /** 车机画面来源：
+     *  · "car_ui"         —— 本 App 自绘车机首页（地图卡 + 音乐卡 + Dock）
+     *  · "carwith"        —— 小米 CarWith：拉起它的 CarLife 入口，由 CarWith 自己建显示/编码，
+     *                        我们只做 CarLife 通道 → AirPlay 的转发（需装 CarWith + 小米版 CarLife）
+     *  · "system_carlife" —— 手机自带的百度 CarLife（三星车联 / 荣耀车联等）：没有小米的 ADB
+     *                        入口，也没有第 7 路 9440；用户手动进它的「无线连接」，我们拨本机端口。
      */
     var carSource: String
         get() = p().getString("car_source", "car_ui") ?: "car_ui"
@@ -318,8 +320,14 @@ object SettingsStore {
     /** Existing explicit choices survive upgrades; fresh installs must choose a source. */
     val carSourceSelected: Boolean get() = p().contains("car_source")
 
-    /** 是否 CarWith 模式。 */
+    /** 是否 CarWith 模式（仅小米）。 */
     val carWithMode: Boolean get() = carSource == "carwith"
+
+    /** 是否系统自带 CarLife 模式（三星车联 / 荣耀车联等）。 */
+    val systemCarLifeMode: Boolean get() = carSource == "system_carlife"
+
+    /** 任一由本机 CarLife 引擎提供画面的来源。 */
+    val carLifeMode: Boolean get() = carWithMode || systemCarLifeMode
 
     // The retired self-rendered speech experiment also gates incoming native callbacks.
     val carVoiceRecognition: Boolean get() = false
@@ -395,8 +403,9 @@ object SettingsStore {
         width: Int = videoWidth,
         height: Int = videoHeight,
         receiverBluetoothMac: String? = null,
-        carWithSource: Boolean = carWithMode,
+        carWithSource: Boolean = carLifeMode,
         receiverModel: String? = null,
+        systemCarLifeSource: Boolean = systemCarLifeMode,
     ): String {
         fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
         // 触摸兜底空间：车机档案若给了 touchDisplay 就用它；否则用设置里的
@@ -428,6 +437,9 @@ object SettingsStore {
             }
             // CarWith 模式：视频/音频源改由本机 CarLife（CarWith）提供（2026-11-03）
             append("\"carlife_source\":").append(if (carWithSource) "true" else "false").append(",")
+            // 系统自带 CarLife 没有第 7 路 9440，也不做小米的 CONTENT_ENCRYPTION。
+            append("\"carwith_data_channel\":").append(!systemCarLifeSource).append(",")
+            append("\"carwith_content_encryption\":").append(!systemCarLifeSource).append(",")
             append("\"mbux_screen_bootstrap\":").append(profile.mbuxScreenBootstrap).append(",")
             append("\"id9_screen_bootstrap\":").append(profile.id9ScreenBootstrap).append(",")
             append("\"nbt_audio_first\":").append(profile.nbtAudioFirst).append(",")

@@ -19,6 +19,8 @@ data class StartupReadiness(
         when (source) {
             "car_ui" -> if (!shizukuReady) add("安装、启动 Shizuku 并授权 HyperCar")
             "carwith" -> if (!carWithInstalled) add("安装并启用系统 CarWith（com.miui.carlink）")
+            // 系统 CarLife 由用户自己在它的「无线连接」页里启动，本应用不设前置门槛。
+            "system_carlife" -> Unit
             else -> add("选择车机画面来源")
         }
     }
