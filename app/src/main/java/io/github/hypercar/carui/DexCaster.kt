@@ -133,10 +133,6 @@ object DexCaster {
         running = true
         CarAudioCapture.start(context)
         runCatching { RustCoreBridge.nativeSetVideoSize(width, height) }
-        // 叠加视图的窗口会盖在手机屏幕上（系统窗口，没有权限就没法隐藏或挪走）。
-        // 会话期间直接关掉面板：车上本来就是熄屏，窗口自然不可见。
-        val screenOff = runCatching { SpikeShell.setPhysicalScreenPower(false) }.getOrDefault(false)
-        HyperCarRepo.log("DEX: 关屏=$screenOff（叠加视图窗口只在面板亮起时可见）")
         scope.launch {
             kotlinx.coroutines.delay(900)
             if (!current()) return@launch
@@ -250,7 +246,6 @@ object DexCaster {
         if (displayId > 0 && !overlayMode) release("display") { SpikeShell.releaseDisplay(displayId) }
         displayId = -1
         if (overlayMode) releaseOverlayDisplay()
-        release("panel") { SpikeShell.setPhysicalScreenPower(true) }
         release("encoder") { caster?.stop() }
         caster = null
         running = false
