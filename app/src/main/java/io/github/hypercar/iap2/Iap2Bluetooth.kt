@@ -1239,7 +1239,9 @@ private class RfcommLinkChannel(
             synchronized(lock) {
                 // 车机连入后先发探测。这里只进入等待，不把探测和同步写出；
                 // 第一次 read 到 FF 55 之后，引擎再回探测，并等车机的 SYN。
-                engine.start(nowMillis(), passive = true)
+                // 例外：走 ZLink 厂商通道时是我们主动拨号，车机只等不开口，
+                // 必须由我们先发探测 + SYN，否则两边对读到 60s 超时。
+                engine.start(nowMillis(), passive = !SettingsStore.zlinkBridgeUuid)
             }
             val buffer = ByteArray(4096)
             val input: InputStream = socket.inputStream
