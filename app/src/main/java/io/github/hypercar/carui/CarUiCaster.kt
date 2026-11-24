@@ -5,7 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.media.ImageReader
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -58,6 +60,7 @@ object CarUiCaster {
 
     private var caster: SpikeCaster? = null
     @Volatile private var displayId = -1
+    private var debugReader: ImageReader? = null
     @Volatile private var displayService: IBinder? = null
     private var cpuLock: PowerManager.WakeLock? = null
 
@@ -227,6 +230,26 @@ object CarUiCaster {
             recovery?.cancel()
             if (registered) app.unregisterReceiver(receiver)
         }
+    }
+
+    /**
+     * 调试：不依赖 AirPlay 会话，直接经 Shizuku 建一块虚拟屏。
+     * 用途是把外部画面源（例如 DeX 桌面）拉上去验证，`am start --display <id>` 即可。
+     */
+    suspend fun debugCreateDisplay(
+        context: Context,
+        w: Int = 1920,
+        h: Int = 1080,
+        name: String = "hypercar-dbg",
+    ): String {
+        val bind = SpikeShell.connect(context)
+        if (SpikeShell.userServiceBinder == null) return "shell 未连接（bind=$bind）"
+        val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+        debugReader = reader
+        val created = SpikeShell.createDisplay(reader.surface, w, h, 160, 0, name)
+        val id = Regex("id=(\\d+)").find(created)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+        HyperCarRepo.log("CARUI-DBG: $created display=$id")
+        return "display=$id | $created"
     }
 
     private suspend fun startLocked(context: Context, keepAudio: Boolean = false, current: () -> Boolean): String {

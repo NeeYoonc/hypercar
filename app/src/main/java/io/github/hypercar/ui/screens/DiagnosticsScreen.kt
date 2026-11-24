@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -125,6 +126,8 @@ private fun Header(
     onExport: () -> Unit,
     /** 一键反馈的结果提示（成功/失败文案交给页面统一弹 toast）。 */
     onFeedback: (String) -> Unit,
+    /** 调试：不连车机建一块虚拟屏，验证外部画面源。 */
+    onDebugDisplay: () -> Unit,
     logs: List<String>,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -140,6 +143,10 @@ private fun Header(
                     style = MaterialTheme.typography.bodySmall,
                     color = if (recording) TextSecondary else AmberWarning,
                 )
+            }
+            // 调试入口：不依赖会话，直接建虚拟屏（验证 DeX 等外部画面源）
+            TextButton(onClick = onDebugDisplay) {
+                Text("建虚拟屏", color = ElectricCyan, style = MaterialTheme.typography.labelSmall)
             }
             // 记录开关：暂停后不再写入环形缓冲（既有内容保留），上车抓关键段落用
             Row(verticalAlignment = Alignment.CenterVertically) {

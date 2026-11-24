@@ -3766,6 +3766,20 @@ object HyperCarRepo {
      * （logcat 也一起省掉），等下一次有非重复行进来时补一条「已折叠 N 条」。事件回环的历史
      * 故障就是 0.6s 灌了 300 行；有了限流，环形缓冲能把真正的上下文留下来。
      */
+    /** 调试：不连车机也经 Shizuku 建一块虚拟屏，用于验证外部画面源（DeX 等）。 */
+    fun debugCreateDisplay() {
+        scope.launch {
+            val ctx = appContext()
+            if (ctx == null) {
+                log("CARUI-DBG: 上下文为空，跳过建屏")
+                return@launch
+            }
+            val msg = runCatching { CarUiCaster.debugCreateDisplay(ctx) }
+                .getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }
+            log("CARUI-DBG: $msg")
+        }
+    }
+
     fun log(line: String) {
         if (line.startsWith("BT-ACCEPT: ")) ctrlDiscoveryTrace.record("event=rfcomm-inbound " + line.removePrefix("BT-ACCEPT: "))
         val now = SystemClock.elapsedRealtime()
