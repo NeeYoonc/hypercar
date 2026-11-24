@@ -3817,8 +3817,9 @@ object HyperCarRepo {
         val target = SettingsStore.targetCarMac?.takeIf { it.contains(':') }
             ?: SettingsStore.pairedCars.lastOrNull()?.substringBefore('|').orEmpty().takeIf { it.contains(':') }
             ?: return@withContext "没有可用的目标车机，请先在「我的车机」里选一台"
+        val instance = iap2 ?: return@withContext "蓝牙会话未启动：先在首页点一次「启动连接」，再回来拨号"
         val deferred = kotlinx.coroutines.CompletableDeferred<String>()
-        io.github.hypercar.iap2.Iap2Bluetooth.probeAccessoryChannel(target) { deferred.complete(it) }
+        instance.probeAccessoryChannel(target) { deferred.complete(it) }
         withTimeoutOrNull(12_000) { deferred.await() } ?: "拨号超时（12s），车机可能不在可连接范围"
     }
 
