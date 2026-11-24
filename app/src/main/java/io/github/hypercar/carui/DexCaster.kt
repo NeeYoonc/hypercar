@@ -96,6 +96,9 @@ object DexCaster {
             return "shell 建屏失败: $created（bind=$bind）"
         }
         displayId = id
+        // 虚拟屏默认是 fullscreen 窗口模式，应用会整屏铺满、也没有标题栏；
+        // 切成 freeform 后每个应用是带标题栏的浮动窗口（mode_id=5 即 WINDOWING_MODE_FREEFORM）。
+        runCatching { ShizukuTools.exec("cmd window set-display-windowing-mode -d $id 5", 4_000) }
         val launch = SpikeDisplay.amStartComponentOnDisplay(id, COMPONENT, clearTask = false)
         if (!current()) {
             stopLocked()
