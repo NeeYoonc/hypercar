@@ -130,9 +130,13 @@ class SpikeShellService : ISpikeShell.Stub {
                         unlink
                     }.getOrNull()
                 }) return "ERR display owner disconnected"
+            // 调用方传 1<<15 表示「不要独立 DisplayGroup」：用来复现开发者选项里
+            // 「模拟辅助显示设备」（overlay 屏）的行为——那类屏上 DeX 会按桌面模式开窗口。
+            val sharedGroup = (flags and (1 shl 15)) != 0
+            val callerFlags = flags and (1 shl 15).inv()
             val base = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+                (if (sharedGroup) 0 else DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY)
             // 隐藏 flag（AOSP DisplayManager.java）：SUPPORTS_TOUCH=1<<6、
             // TRUSTED=1<<10、OWN_FOCUS=1<<14。OWN_FOCUS 要求 display 同时 TRUSTED。
             val touch = 1 shl 6
@@ -143,13 +147,17 @@ class SpikeShellService : ISpikeShell.Stub {
             // TRUSTED（shell 已具备）；ALWAYS_UNLOCKED 另有权限，部分 ROM 不给，故三级降级。
             val ownGroup = 1 shl 11
             val alwaysUnlocked = 1 shl 12
-            val candidates = intArrayOf(
-                base or flags or touch or ownFocus or trusted or ownGroup or alwaysUnlocked,
-                base or flags or touch or ownFocus or trusted or ownGroup,
-                base or flags or touch or ownFocus or trusted,
-                base or flags or touch or ownFocus,
-                base or flags or touch,
-                base or flags,
+            val candidates = if (sharedGroup) intArrayOf(
+                base or callerFlags or touch or trusted,
+                base or callerFlags or touch,
+                base or callerFlags,
+            ) else intArrayOf(
+                base or callerFlags or touch or ownFocus or trusted or ownGroup or alwaysUnlocked,
+                base or callerFlags or touch or ownFocus or trusted or ownGroup,
+                base or callerFlags or touch or ownFocus or trusted,
+                base or callerFlags or touch or ownFocus,
+                base or callerFlags or touch,
+                base or callerFlags,
             )
 
             var lastError: Throwable? = null

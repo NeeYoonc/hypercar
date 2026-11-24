@@ -95,7 +95,9 @@ object DexCaster {
         // DeX 的多窗口依赖系统自由窗口开关；虚拟屏默认是全屏，不打开这两个开关，应用会铺满整屏。
         runCatching { ShizukuTools.exec("settings put global enable_freeform_support 1", 4_000) }
         runCatching { ShizukuTools.exec("settings put global force_resizable_activities 1", 4_000) }
-        val created = SpikeShell.createDisplay(surface, width, height, DPI, 0, "hypercar-dex")
+        // 1<<15：不要独立 DisplayGroup，让这块屏像开发者选项的「模拟辅助显示设备」那样
+        // 被 DeX 当作桌面屏，应用才按自由窗口开。
+        val created = SpikeShell.createDisplay(surface, width, height, DPI, 1 shl 15, "hypercar-dex")
         val id = Regex("id=(\\d+)").find(created)?.groupValues?.get(1)?.toIntOrNull() ?: -1
         if (id <= 0) {
             next.stop()
