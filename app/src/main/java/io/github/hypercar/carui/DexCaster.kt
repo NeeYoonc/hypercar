@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import io.github.hypercar.core.RustCoreBridge
 import io.github.hypercar.session.HyperCarRepo
+import io.github.hypercar.shizuku.ShizukuTools
 import io.github.hypercar.settings.SettingsStore
 import io.github.hypercar.spike.SpikeCaster
 import io.github.hypercar.spike.SpikeDisplay
@@ -84,6 +85,9 @@ object DexCaster {
             caster = null
             return "shell 建屏取消（bind=$bind）"
         }
+        // DeX 的多窗口依赖系统自由窗口开关；虚拟屏默认是全屏，不打开这两个开关，应用会铺满整屏。
+        runCatching { ShizukuTools.exec("settings put global enable_freeform_support 1", 4_000) }
+        runCatching { ShizukuTools.exec("settings put global force_resizable_activities 1", 4_000) }
         val created = SpikeShell.createDisplay(surface, width, height, DPI, 0, "hypercar-dex")
         val id = Regex("id=(\\d+)").find(created)?.groupValues?.get(1)?.toIntOrNull() ?: -1
         if (id <= 0) {
