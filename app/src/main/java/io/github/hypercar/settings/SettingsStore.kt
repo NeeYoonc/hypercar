@@ -103,6 +103,15 @@ object SettingsStore {
             SettingsRevision.bump()
         }
 
+    /** 开发者开关：把 iAP2 出站通道切到 ZLink5 的厂商 UUID（部分车机不在 SDP 声明 …caff）。 */
+    var zlinkBridgeUuid: Boolean
+        get() = developerMenuVisible && p().getBoolean("zlink_bridge_uuid", false)
+        set(value) {
+            if (!developerModeEnabled) return
+            p().edit().putBoolean("zlink_bridge_uuid", value).apply()
+            SettingsRevision.bump()
+        }
+
     var carPlayDeviceInfoModelEnabled: Boolean
         get() = developerMenuVisible && p().getBoolean("carplay_device_info_model", false)
         set(value) {

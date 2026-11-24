@@ -311,6 +311,29 @@ private fun DeveloperMenuSection() {
             forceResult?.let { Text(it, color = TextPrimary, style = MaterialTheme.typography.bodySmall) }
         }
     }
+    SectionLabel("iAP2 通道")
+    GlassPanel(contentPadding = PaddingValues(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("走 ZLink 厂商通道", color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "部分车机（ZLink5）不在 SDP 里声明 …caff，改在厂商 UUID 4de17a00-… 上发 iAP2。",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = SettingsStore.zlinkBridgeUuid,
+                onCheckedChange = { SettingsStore.zlinkBridgeUuid = it },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = ElectricCyan,
+                    checkedTrackColor = ElectricCyan.copy(alpha = 0.25f),
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = StrokeGlass,
+                ),
+            )
+        }
+    }
     SectionLabel("宝马 iD8.5 蓝牙握手实验")
     GlassPanel(contentPadding = PaddingValues(16.dp)) {
         SwitchRow("普通 BMW Apps v1 先认证", "用于已配对宝马的入站 v1 握手，按 AA00 → 认证 → 1D00 的顺序。",

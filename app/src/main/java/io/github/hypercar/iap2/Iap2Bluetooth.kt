@@ -77,6 +77,11 @@ class Iap2Bluetooth(
         /** 手机侧（我们监听）的 iAP2 服务 UUID；配件端（车机监听）是 …decacaff。 */
         val IPHONE_IAP2_UUID: UUID = UUID.fromString("00000000-deca-fade-deca-deafdecacafe")
         val ACCESSORY_IAP2_UUID: UUID = UUID.fromString("00000000-deca-fade-deca-deafdecacaff")
+        /** ZLink5 一类车机不在 SDP 里声明 …caff，只在厂商 UUID 上开 iAP2 通道（实测可连）。 */
+        val ZLINK_BRIDGE_UUID: UUID = UUID.fromString("4de17a00-52cb-11e6-bdf4-0800200c9a66")
+
+        /** 出站与 SDP 判定用哪条 UUID 通道；开发者菜单里可切到 ZLink。 */
+        fun transportUuid(): UUID = if (SettingsStore.zlinkBridgeUuid) ZLINK_BRIDGE_UUID else ACCESSORY_IAP2_UUID
 
         /** cafe 记录的 SDP 服务名。车机按 UUID 查找，这个名字不参与其它 Profile。 */
         private const val SDP_NAME = "Wireless iAP"
@@ -563,7 +568,7 @@ class Iap2Bluetooth(
         val tag = "BT-CAFF#${probe.attempt}"
         // A cached UUID only saves the broad fetch. It never supplies an RFCOMM channel:
         // the secure UUID socket still resolves its service on the target, or fails closed.
-        val cacheHit = device.uuids?.any { it.uuid == ACCESSORY_IAP2_UUID } == true
+        val cacheHit = device.uuids?.any { it.uuid == transportUuid() } == true
         val service = if (cacheHit) "present" else freshIap2Service(device, ::eligible)
         log("$tag: SDP result=$service source=${if (cacheHit) "uuid-cache" else "uuid-fetch"} profiles=$profiles")
         if (!probe.recordSdp(service == "present")) return
@@ -572,7 +577,7 @@ class Iap2Bluetooth(
             probe.cancel()
             return
         }
-        val socket = device.createRfcommSocketToServiceRecord(ACCESSORY_IAP2_UUID)
+        val socket = device.createRfcommSocketToServiceRecord(transportUuid())
         if (!probe.attach { runCatching { socket.close() } }) {
             socket.close()
             return
@@ -756,7 +761,7 @@ class Iap2Bluetooth(
 
         fun cachedHas(): Boolean =
             runCatching {
-                device.uuids?.any { it.uuid == ACCESSORY_IAP2_UUID } == true
+                device.uuids?.any { it.uuid == transportUuid() } == true
             }.getOrDefault(false)
 
         if (cachedHas()) {
@@ -786,7 +791,7 @@ class Iap2Bluetooth(
                     val services = intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
                     result = when {
                         services == null -> "unknown"
-                        services.any { (it as? android.os.ParcelUuid)?.uuid == ACCESSORY_IAP2_UUID } -> "present"
+                        services.any { (it as? android.os.ParcelUuid)?.uuid == transportUuid() } -> "present"
                         else -> "absent"
                     }
                     latch.countDown()
@@ -820,7 +825,7 @@ class Iap2Bluetooth(
         if (!sessions.allowsOutbound(ticket)) return null
         val socket =
             try {
-                device.createRfcommSocketToServiceRecord(ACCESSORY_IAP2_UUID)
+                device.createRfcommSocketToServiceRecord(transportUuid())
             } catch (_: IOException) {
                 return null
             }
