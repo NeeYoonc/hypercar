@@ -67,6 +67,7 @@ fun DiagnosticsScreen(
     onClearLogs: () -> Unit,
     onExport: () -> Unit,
     onDebugDisplay: () -> Unit,
+    onDebugDex: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 轻提示（复制/导出反馈）：2s 自动消失

@@ -1847,6 +1847,20 @@ fun CarSourceSection(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = StrokeGlass.copy(alpha = 0.5f))
             Spacer(Modifier.height(16.dp))
+            Text("DeX 模式", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
+            Text("把三星 DeX 桌面放到虚拟屏上推给车机：桌面、多窗口和任务栏由 DeX 自己渲染，需要 Shizuku 已授权。",
+                color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            CapsuleButton(if (current == "dex") "已选择 DeX" else "选择 DeX",
+                onClick = { selectSource("dex") }, enabled = !connected && startup.shizukuReady,
+                modifier = Modifier.fillMaxWidth(), filled = current == "dex")
+            if (!startup.shizukuReady) {
+                Text("需要先完成上面的 Shizuku 授权。", color = AmberWarning,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = StrokeGlass.copy(alpha = 0.5f))
+            Spacer(Modifier.height(16.dp))
             Text("CarWith 模式", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
             Text(if (startup.carWithInstalled) "已检测到系统 CarWith，无需 Shizuku。未授权 Shizuku 时，入网或蓝牙可发现可能需要按系统提示确认。"
                 else "未检测到可用的系统 CarWith（com.miui.carlink），当前设备无法选择此模式。",
