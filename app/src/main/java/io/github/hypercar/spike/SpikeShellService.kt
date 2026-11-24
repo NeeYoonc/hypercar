@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import android.view.Display
 import android.view.InputDevice
 import android.view.InputEvent
 import android.view.MotionEvent
