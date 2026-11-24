@@ -247,21 +247,44 @@ class SpikeShellService : ISpikeShell.Stub {
                     builderClass
                         .getMethod("setFlags", Int::class.javaPrimitiveType)
                         .invoke(builder, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC)
-                    // Android 16 没有把 Surface 传给 createVirtualDisplay 的重载：Surface 必须写进 config。
-                    builderClass
-                        .getMethod("setSurface", Surface::class.java)
-                        .invoke(builder, surface)
+                    // Android 16 没有「Surface 传给 createVirtualDisplay」的重载：Surface 必须写进 config。
+                    builderClass.getMethod("setSurface", Surface::class.java).invoke(builder, surface)
                     builderClass
                         .getMethod("setDisplayIdToMirror", Int::class.javaPrimitiveType)
                         .invoke(builder, sourceDisplayId)
                     val config = builderClass.getMethod("build").invoke(builder)
-                    val create = dm.javaClass.methods.firstOrNull {
-                        it.name == "createVirtualDisplay" && it.parameterTypes.size == 3 &&
-                            it.parameterTypes[0].name.endsWith("VirtualDisplayConfig") &&
-                            it.parameterTypes[1].name == "java.util.concurrent.Executor"
-                    } ?: return "ERR 没有 createVirtualDisplay(VirtualDisplayConfig, Executor, Callback)"
-                    val vd = create.invoke(dm, config, null, null) as? VirtualDisplay
-                        ?: return "ERR createVirtualDisplay 返回 null"
+                    // 各 ROM 的 createVirtualDisplay 重载不一致（AOSP 传 Executor，三星有传 Handler 的），
+                    // 这里把所有 (VirtualDisplayConfig, …, Callback) 候选都试一遍，并把签名写进日志。
+                    val candidates = dm.javaClass.methods.filter { it.name == "createVirtualDisplay" }
+                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                    val sigs = candidates.joinToString(" | ") { m ->
+                        "(" + m.parameterTypes.joinToString(",") { it.simpleName } + ")"
+                    }
+                    SpikeReport.add("SHELL", "createVirtualDisplay 候选: $sigs")
+                    var made: VirtualDisplay? = null
+                    var lastFail: Throwable? = null
+                    for (m in candidates) {
+                        val types = m.parameterTypes
+                        if (types.size != 3) continue
+                        if (!types[0].name.endsWith("VirtualDisplayConfig")) continue
+                        if (!types[2].name.endsWith("Callback")) continue
+                        val second: Any? = when (types[1].name) {
+                            "java.util.concurrent.Executor" -> null
+                            "android.os.Handler" -> handler
+                            else -> continue
+                        }
+                        try {
+                            val v = m.invoke(dm, config, second, null) as? VirtualDisplay
+                            if (v != null) {
+                                made = v
+                                break
+                            }
+                        } catch (t: Throwable) {
+                            lastFail = t
+                        }
+                    }
+                    val vd = made ?: return "ERR 镜像建屏失败（候选: $sigs）: " +
+                        "${lastFail?.javaClass?.simpleName}: ${lastFail?.message}"
                     displays[vd.display.displayId] = vd
                     displaySizes[vd.display.displayId] = Triple(width, height, dpi)
                     val msg = "OK mirror id=${vd.display.displayId} src=$sourceDisplayId package=$pkg"
