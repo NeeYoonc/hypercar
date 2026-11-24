@@ -3228,6 +3228,8 @@ object HyperCarRepo {
 
         override fun onMediaKey(usage: Int) {
             if (!sessionLive.get()) return
+            // 车机每上报一个按键都留痕：用来确认 home/recents 到底有没有送到，以及送的是什么 usage。
+            log("CARKEY: usage=0x" + usage.toString(16))
             val consoleKey = io.github.hypercar.carui.CarConsoleKey.fromInput(usage)
             if (consoleKey != null) {
                 if (!sessionCarLifeMode) {

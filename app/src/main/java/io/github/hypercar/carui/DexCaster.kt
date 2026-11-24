@@ -50,6 +50,13 @@ object DexCaster {
 
     val currentDisplayId: Int get() = displayId
 
+
+    /** 把虚拟屏切换成 freeform，并回报 shell 的真实输出，便于在车机上确认是否生效。 */
+    private suspend fun applyFreeform(id: Int): String = runCatching {
+        val r = ShizukuTools.exec("cmd window set-display-windowing-mode -d $id 5", 4_000)
+        "exit=${r.code} out=${r.out.trim()} err=${r.err.trim()}"
+    }.getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }
+
     suspend fun start(context: Context, current: () -> Boolean = { true }): String {
         if (running) {
             installTouchListener()
@@ -98,7 +105,7 @@ object DexCaster {
         displayId = id
         // 虚拟屏默认是 fullscreen 窗口模式，应用会整屏铺满、也没有标题栏；
         // 切成 freeform 后每个应用是带标题栏的浮动窗口（mode_id=5 即 WINDOWING_MODE_FREEFORM）。
-        runCatching { ShizukuTools.exec("cmd window set-display-windowing-mode -d $id 5", 4_000) }
+        HyperCarRepo.log("DEX: freeform display=$id -> " + applyFreeform(id))
         val launch = SpikeDisplay.amStartComponentOnDisplay(id, COMPONENT, clearTask = false)
         if (!current()) {
             stopLocked()
@@ -113,6 +120,7 @@ object DexCaster {
             kotlinx.coroutines.delay(900)
             if (!current()) return@launch
             runCatching { RustCoreBridge.nativeSetVideoSize(width, height) }
+            HyperCarRepo.log("DEX: freeform retry display=$id -> " + applyFreeform(id))
         }
         val msg = "启动 ok display=$id | ${width}x${height}@${plan.fps} dpi=$DPI | $encoder | bind=$bind | launch=$launch"
         HyperCarRepo.log("DEX: $msg")
