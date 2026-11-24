@@ -998,20 +998,47 @@ class Iap2Bluetooth(
             return
         }
         Thread({
-            val result = runCatching {
+            val text = runCatching {
                 val device = adapter.getRemoteDevice(address)
-                val socket = device.createRfcommSocketToServiceRecord(ACCESSORY_IAP2_UUID)
-                try {
-                    socket.connect()
-                    "…caff 连接成功（$address）"
-                } finally {
-                    runCatching { socket.close() }
+                val lines = mutableListOf<String>()
+                for ((label, uuid) in PROBE_UUIDS) {
+                    val outcome = runCatching {
+                        val socket = device.createRfcommSocketToServiceRecord(uuid)
+                        try {
+                            socket.connect()
+                            "成功"
+                        } finally {
+                            runCatching { socket.close() }
+                        }
+                    }.getOrElse { "失败(${it.javaClass.simpleName}: ${it.message})" }
+                    lines += "$label $outcome"
                 }
-            }.getOrElse { "…caff 连接失败：${it.javaClass.simpleName}: ${it.message}" }
-            log("BT-CAFF-PROBE: $result")
-            onDone(result)
+                // 部分车机不在 SDP 里声明 iAP2，退化为直接按通道号连。
+                for (channel in 1..2) {
+                    val outcome = runCatching {
+                        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType!!)
+                        val socket = method.invoke(device, channel) as android.bluetooth.BluetoothSocket
+                        try {
+                            socket.connect()
+                            "成功"
+                        } finally {
+                            runCatching { socket.close() }
+                        }
+                    }.getOrElse { "失败(${it.javaClass.simpleName})" }
+                    lines += "通道$channel $outcome"
+                }
+                lines.joinToString("\n")
+            }.getOrElse { "探测异常：${it.javaClass.simpleName}: ${it.message}" }
+            log("BT-CAFF-PROBE: $address\n$text")
+            onDone(text)
         }, "iap2-caff-probe").apply { isDaemon = true; start() }
     }
+
+    private val PROBE_UUIDS = listOf(
+        "Apple-iAP2" to ACCESSORY_IAP2_UUID,
+        "ZLink" to UUID.fromString("4de17a00-52cb-11e6-bdf4-0800200c9a66"),
+        "SPP" to UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"),
+    )
 
     // ---- 工具 ----
 

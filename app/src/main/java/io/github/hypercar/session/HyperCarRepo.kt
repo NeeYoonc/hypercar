@@ -3820,7 +3820,7 @@ object HyperCarRepo {
         val instance = iap2 ?: return@withContext "蓝牙会话未启动：先在首页点一次「启动连接」，再回来拨号"
         val deferred = kotlinx.coroutines.CompletableDeferred<String>()
         instance.probeAccessoryChannel(target) { deferred.complete(it) }
-        withTimeoutOrNull(12_000) { deferred.await() } ?: "拨号超时（12s），车机可能不在可连接范围"
+        withTimeoutOrNull(30_000) { deferred.await() } ?: "探测超时（30s），车机可能不在可连接范围"
     }
 
     fun log(line: String) {
