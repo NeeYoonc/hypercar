@@ -93,6 +93,7 @@ fun DiagnosticsScreen(
             onExport = onExport,
             onFeedback = { toast = it },
             onDebugDisplay = onDebugDisplay,
+            onDebugDex = onDebugDex,
             logs = logs,
         )
         AnimatedVisibility(
@@ -130,6 +131,8 @@ private fun Header(
     onFeedback: (String) -> Unit,
     /** 调试：不连车机建一块虚拟屏，验证外部画面源。 */
     onDebugDisplay: () -> Unit,
+    /** 调试：不连车机直接起 DeX 画面源。 */
+    onDebugDex: () -> Unit,
     logs: List<String>,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -149,6 +152,9 @@ private fun Header(
             // 调试入口：不依赖会话，直接建虚拟屏（验证 DeX 等外部画面源）
             TextButton(onClick = onDebugDisplay) {
                 Text("建虚拟屏", color = ElectricCyan, style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(onClick = onDebugDex) {
+                Text("启动 DeX", color = ElectricCyan, style = MaterialTheme.typography.labelSmall)
             }
             // 记录开关：暂停后不再写入环形缓冲（既有内容保留），上车抓关键段落用
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -442,6 +442,7 @@ private fun MainContent(onStart: () -> Unit) {
                         onClearLogs = { HyperCarRepo.clearLogs() },
                         onExport = { HyperCarRepo.exportLogs() },
                         onDebugDisplay = { HyperCarRepo.debugCreateDisplay() },
+                        onDebugDex = { HyperCarRepo.debugStartDex() },
                     )
 
                     AppTab.About -> AboutScreen()
