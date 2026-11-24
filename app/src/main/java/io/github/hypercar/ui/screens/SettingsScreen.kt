@@ -291,6 +291,24 @@ private fun DeveloperMenuSection() {
                 }
             })
             dialResult?.let { Text(it, color = TextPrimary, style = MaterialTheme.typography.bodySmall) }
+            // 通用档案没有 …caff 实验流程：直接向目标车机拨一次，用来确认车机是否接受我们。
+            var forceDialing by remember { mutableStateOf(false) }
+            var forceResult by remember { mutableStateOf<String?>(null) }
+            Text("通用档案：不等 SDP 声明，直接向目标车机的 …caff 通道拨一次，看车机是否接受。",
+                color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            CapsuleButton(if (forceDialing) "拨号中…" else "强制拨号车机 …caff", enabled = !forceDialing, onClick = force@{
+                if (forceDialing) return@force
+                forceDialing = true
+                forceResult = null
+                scope.launch {
+                    try {
+                        forceResult = HyperCarRepo.forceDialAccessoryChannel()
+                    } finally {
+                        forceDialing = false
+                    }
+                }
+            })
+            forceResult?.let { Text(it, color = TextPrimary, style = MaterialTheme.typography.bodySmall) }
         }
     }
     SectionLabel("宝马 iD8.5 蓝牙握手实验")

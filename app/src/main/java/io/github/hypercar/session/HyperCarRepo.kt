@@ -3812,6 +3812,16 @@ object HyperCarRepo {
         }
     }
 
+    /** 设置页「强制拨号」：向目标车机的 …caff 通道发一次连接探测，不进入会话。 */
+    suspend fun forceDialAccessoryChannel(): String = withContext(Dispatchers.IO) {
+        val target = SettingsStore.targetCarMac?.takeIf { it.contains(':') }
+            ?: SettingsStore.pairedCars.lastOrNull()?.substringBefore('|').orEmpty().takeIf { it.contains(':') }
+            ?: return@withContext "没有可用的目标车机，请先在「我的车机」里选一台"
+        val deferred = kotlinx.coroutines.CompletableDeferred<String>()
+        io.github.hypercar.iap2.Iap2Bluetooth.probeAccessoryChannel(target) { deferred.complete(it) }
+        withTimeoutOrNull(12_000) { deferred.await() } ?: "拨号超时（12s），车机可能不在可连接范围"
+    }
+
     fun log(line: String) {
         if (line.startsWith("BT-ACCEPT: ")) ctrlDiscoveryTrace.record("event=rfcomm-inbound " + line.removePrefix("BT-ACCEPT: "))
         val now = SystemClock.elapsedRealtime()

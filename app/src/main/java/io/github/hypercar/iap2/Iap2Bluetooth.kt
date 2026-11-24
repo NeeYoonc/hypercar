@@ -986,6 +986,33 @@ class Iap2Bluetooth(
         }
     }
 
+    /**
+     * 调试：强制向目标车机的 …caff 服务发起一次 RFCOMM 连接，不等 SDP 声明。
+     * 连上后立即关闭并回传结果，不进入会话；用于判断车机是否接受我们。
+     */
+    @SuppressLint("MissingPermission")
+    fun probeAccessoryChannel(address: String, onDone: (String) -> Unit) {
+        val adapter = adapterOrNull()
+        if (adapter == null) {
+            onDone("蓝牙未就绪")
+            return
+        }
+        Thread({
+            val result = runCatching {
+                val device = adapter.getRemoteDevice(address)
+                val socket = device.createRfcommSocketToServiceRecord(ACCESSORY_IAP2_UUID)
+                try {
+                    socket.connect()
+                    "…caff 连接成功（$address）"
+                } finally {
+                    runCatching { socket.close() }
+                }
+            }.getOrElse { "…caff 连接失败：${it.javaClass.simpleName}: ${it.message}" }
+            log("BT-CAFF-PROBE: $result")
+            onDone(result)
+        }, "iap2-caff-probe").apply { isDaemon = true; start() }
+    }
+
     // ---- 工具 ----
 
     private fun adapterOrNull(): android.bluetooth.BluetoothAdapter? =
