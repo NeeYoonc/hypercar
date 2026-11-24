@@ -251,9 +251,12 @@ class SpikeShellService : ISpikeShell.Stub {
                         .getMethod("setDisplayIdToMirror", Int::class.javaPrimitiveType)
                         .invoke(builder, sourceDisplayId)
                     val config = builderClass.getMethod("build").invoke(builder)
+                    // 必须精确匹配 (VirtualDisplayConfig, Surface, Callback)：
+                    // Samsung 上还有 (VirtualDisplayConfig, Handler, Callback) 等同名重载。
                     val create = dm.javaClass.methods.firstOrNull {
                         it.name == "createVirtualDisplay" && it.parameterTypes.size == 3 &&
-                            it.parameterTypes[0].name == "android.hardware.display.VirtualDisplayConfig"
+                            it.parameterTypes[0].name == "android.hardware.display.VirtualDisplayConfig" &&
+                            it.parameterTypes[1].name == "android.view.Surface"
                     } ?: return "ERR 没有 createVirtualDisplay(VirtualDisplayConfig, Surface, Callback)"
                     val vd = create.invoke(dm, config, surface, null) as? VirtualDisplay
                         ?: return "ERR createVirtualDisplay 返回 null"
