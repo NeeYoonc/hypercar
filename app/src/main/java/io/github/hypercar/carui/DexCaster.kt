@@ -92,13 +92,28 @@ object DexCaster {
             caster = null
             return "shell 建屏取消（bind=$bind）"
         }
-        // DeX 的多窗口依赖系统自由窗口开关；虚拟屏默认是全屏，不打开这两个开关，应用会铺满整屏。
-        runCatching { ShizukuTools.exec("settings put global enable_freeform_support 1", 4_000) }
-        runCatching { ShizukuTools.exec("settings put global force_resizable_activities 1", 4_000) }
-        // 1<<15：不要独立 DisplayGroup，让这块屏像开发者选项的「模拟辅助显示设备」那样
-        // 被 DeX 当作桌面屏，应用才按自由窗口开。
-        val created = SpikeShell.createDisplay(surface, width, height, DPI, 1 shl 15, "hypercar-dex")
-        val id = Regex("id=(\\d+)").find(created)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+        // 三星 DeX 只把「系统叠加视图」（开发者选项里的模拟辅助显示设备，type=OVERLAY）
+        // 当成桌面显示器：在那块屏上点图标就能开自由窗口。shell 自建的 VIRTUAL 屏做不到，
+        // 所以这里先让系统建一块叠加视图，再把它的画面镜像进编码器。
+        val overlayId = ensureOverlayDisplay(width, height)
+        val created = if (overlayId > 0) {
+            SpikeShell.createMirrorDisplay(surface, width, height, DPI, overlayId)
+        } else {
+            runCatching { ShizukuTools.exec("settings put global enable_freeform_support 1", 4_000) }
+            runCatching { ShizukuTools.exec("settings put global force_resizable_activities 1", 4_000) }
+            SpikeShell.createDisplay(surface, width, height, DPI, 0, "hypercar-dex")
+        }
+        if (overlayId > 0 && !created.startsWith("OK")) {
+            next.stop()
+            caster = null
+            releaseOverlayDisplay()
+            return "叠加视图镜像失败: $created（overlay=$overlayId）"
+        }
+        val id = if (overlayId > 0) {
+            overlayId
+        } else {
+            Regex("id=(\\d+)").find(created)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+        }
         if (id <= 0) {
             next.stop()
             caster = null
@@ -173,6 +188,38 @@ object DexCaster {
     }
 
     @Volatile private var downTime = 0L
+    /** 本轮是否用了系统叠加视图（DeX 原生窗口化依赖它）。 */
+    @Volatile private var overlayMode = false
+    /** 镜像我们那块屏的 displayId（不是叠加视图本身）。 */
+    @Volatile private var mirrorDisplayId = -1
+
+    /** 让系统建一块叠加视图（模拟辅助显示设备），返回它的 displayId；失败返回 -1。 */
+    private suspend fun ensureOverlayDisplay(w: Int, h: Int): Int {
+        SpikeShell.findOverlayDisplay().takeIf { it > 0 }?.let {
+            overlayMode = true
+            return it
+        }
+        val size = "$w" + "x" + "$h"
+        runCatching { ShizukuTools.exec("settings put global overlay_display_devices \"$size/240\"", 4_000) }
+        repeat(12) {
+            kotlinx.coroutines.delay(300)
+            val id = SpikeShell.findOverlayDisplay()
+            if (id > 0) {
+                overlayMode = true
+                return id
+            }
+        }
+        return -1
+    }
+
+    private fun releaseOverlayDisplay() {
+        if (!overlayMode) return
+        overlayMode = false
+        scope.launch {
+            runCatching { ShizukuTools.exec("settings put global overlay_display_devices \"\"", 4_000) }
+        }
+    }
+
 
     private fun holdCpuAwake(context: Context) {
         runCatching {
@@ -192,8 +239,13 @@ object DexCaster {
     private fun stopLocked() {
         release("audio") { CarAudioCapture.stop() }
         release("touch") { RustCoreBridge.setTouchListener(null) }
-        if (displayId > 0) release("display") { SpikeShell.releaseDisplay(displayId) }
+        if (mirrorDisplayId > 0) {
+            release("mirror") { SpikeShell.releaseDisplay(mirrorDisplayId) }
+            mirrorDisplayId = -1
+        }
+        if (displayId > 0 && !overlayMode) release("display") { SpikeShell.releaseDisplay(displayId) }
         displayId = -1
+        if (overlayMode) releaseOverlayDisplay()
         release("encoder") { caster?.stop() }
         caster = null
         running = false

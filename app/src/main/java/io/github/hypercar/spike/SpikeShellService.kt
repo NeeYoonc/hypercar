@@ -201,6 +201,90 @@ class SpikeShellService : ISpikeShell.Stub {
         }
     }
 
+    /**
+     * 把已有显示镜像到给定 Surface。系统「模拟辅助显示设备」（overlay display，type=OVERLAY）
+     * 会被三星 DeX 当成桌面显示器，点击图标就开自由窗口；而 shell 自建的 VIRTUAL 屏做不到。
+     */
+    override fun createMirrorDisplay(
+        owner: IBinder,
+        surface: Surface?,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        sourceDisplayId: Int,
+    ): String {
+        val ctx = appContext ?: return "ERR 没有 Context"
+        if (surface == null) return "ERR surface=null"
+        if (sourceDisplayId < 0) return "ERR source=$sourceDisplayId"
+        synchronized(lock) {
+            if (!displayLease.bind(owner) { callback ->
+                    val death = IBinder.DeathRecipient { callback() }
+                    runCatching {
+                        owner.linkToDeath(death, 0)
+                        val unlink: () -> Unit = { runCatching { owner.unlinkToDeath(death, 0) } }
+                        unlink
+                    }.getOrNull()
+                }) return "ERR display owner disconnected"
+            var lastError: Throwable? = null
+            for (pkg in listOf("com.android.shell", "android")) {
+                val dm = runCatching {
+                    val ctor = DisplayManager::class.java.getDeclaredConstructor(Context::class.java)
+                    ctor.isAccessible = true
+                    ctor.newInstance(PackageOverrideContext(ctx, pkg)) as DisplayManager
+                }.getOrNull() ?: continue
+                try {
+                    val builderClass = Class.forName("android.hardware.display.VirtualDisplayConfig\$Builder")
+                    val builder = builderClass
+                        .getDeclaredConstructor(
+                            String::class.java,
+                            Int::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                        )
+                        .apply { isAccessible = true }
+                        .newInstance("hypercar-dex-mirror", width, height, dpi)
+                    builderClass
+                        .getMethod("setFlags", Int::class.javaPrimitiveType)
+                        .invoke(builder, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC)
+                    builderClass
+                        .getMethod("setDisplayIdToMirror", Int::class.javaPrimitiveType)
+                        .invoke(builder, sourceDisplayId)
+                    val config = builderClass.getMethod("build").invoke(builder)
+                    val create = dm.javaClass.methods.firstOrNull {
+                        it.name == "createVirtualDisplay" && it.parameterTypes.size == 3 &&
+                            it.parameterTypes[0].name == "android.hardware.display.VirtualDisplayConfig"
+                    } ?: return "ERR 没有 createVirtualDisplay(VirtualDisplayConfig, Surface, Callback)"
+                    val vd = create.invoke(dm, config, surface, null) as? VirtualDisplay
+                        ?: return "ERR createVirtualDisplay 返回 null"
+                    displays[vd.display.displayId] = vd
+                    displaySizes[vd.display.displayId] = Triple(width, height, dpi)
+                    val msg = "OK mirror id=${vd.display.displayId} src=$sourceDisplayId package=$pkg"
+                    Log.i(TAG, "createMirrorDisplay $msg")
+                    SpikeReport.add("SHELL", "createMirrorDisplay $msg")
+                    return msg
+                } catch (t: Throwable) {
+                    lastError = t
+                }
+            }
+            return "ERR 镜像建屏失败: ${lastError?.javaClass?.name}: ${lastError?.message}"
+        }
+    }
+
+    /** 系统叠加视图（模拟辅助显示设备）的 displayId；没有返回 -1。 */
+    override fun findOverlayDisplay(): Int {
+        val ctx = appContext ?: return -1
+        val dm = runCatching {
+            val ctor = DisplayManager::class.java.getDeclaredConstructor(Context::class.java)
+            ctor.isAccessible = true
+            ctor.newInstance(PackageOverrideContext(ctx, "com.android.shell")) as DisplayManager
+        }.getOrNull() ?: return -1
+        return dm.displays.firstOrNull { d ->
+            d.displayId != Display.DEFAULT_DISPLAY &&
+                !d.name.startsWith("hypercar-") &&
+                (d.name.contains("叠加") || d.name.contains("Overlay", ignoreCase = true))
+        }?.displayId ?: -1
+    }
+
     override fun releaseDisplay(): String = synchronized(lock) {
         val had = displays.size
         releaseDisplaysLocked()

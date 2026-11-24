@@ -55,6 +55,21 @@ object SpikeShell {
     fun updateDisplaySurface(id: Int, surface: Surface?, width: Int, height: Int, dpi: Int): String =
         service?.updateDisplaySurface(id, surface, width, height, dpi) ?: "ERR shell disconnected"
 
+    /** 把已有显示（系统叠加视图）镜像到 Surface，用于让 DeX 桌面进编码器。 */
+    fun createMirrorDisplay(
+        surface: Surface,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        sourceDisplayId: Int,
+    ): String = runCatching {
+        service?.createMirrorDisplay(displayOwner, surface, width, height, dpi, sourceDisplayId)
+            ?: "ERR 未连接"
+    }.getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }
+
+    /** 系统叠加视图的 displayId；没有返回 -1。 */
+    fun findOverlayDisplay(): Int = runCatching { service?.findOverlayDisplay() ?: -1 }.getOrDefault(-1)
+
     fun touchEvent(displayId: Int, event: MotionEvent): String =
         call("touchEvent") { it.touchEvent(displayId, event) }
 
