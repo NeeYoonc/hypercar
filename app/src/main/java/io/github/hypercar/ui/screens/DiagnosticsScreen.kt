@@ -66,6 +66,7 @@ fun DiagnosticsScreen(
     onToggleRecording: (Boolean) -> Unit,
     onClearLogs: () -> Unit,
     onExport: () -> Unit,
+    onDebugDisplay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 轻提示（复制/导出反馈）：2s 自动消失
@@ -91,6 +92,7 @@ fun DiagnosticsScreen(
             onCopy = { toast = "已复制 ${logs.size} 行日志" },
             onExport = onExport,
             onFeedback = { toast = it },
+            onDebugDisplay = onDebugDisplay,
             logs = logs,
         )
         AnimatedVisibility(
