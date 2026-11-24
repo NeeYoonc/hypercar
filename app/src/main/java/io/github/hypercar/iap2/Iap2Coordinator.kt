@@ -109,6 +109,16 @@ class Iap2Coordinator(
 
     fun diagnosticSummary(): String = bluetooth?.diagnosticSummary() ?: "transport=not-created"
 
+    /** 调试：向目标车机的 …caff 强制拨号一次，转发到蓝牙层。 */
+    fun probeAccessoryChannel(address: String, onDone: (String) -> Unit) {
+        val bt = bluetooth
+        if (bt == null) {
+            onDone("蓝牙层未启动：先在首页点一次「启动连接」")
+            return
+        }
+        bt.probeAccessoryChannel(address, onDone)
+    }
+
     internal fun pollBmwProbe(probe: BmwCaffProbe, device: android.bluetooth.BluetoothDevice,
                              since: Long, ctrlReady: Boolean, manual: Boolean = false, valid: () -> Boolean) {
         bluetooth?.pollBmwProbe(probe, device, since, ctrlReady, manual, valid)
