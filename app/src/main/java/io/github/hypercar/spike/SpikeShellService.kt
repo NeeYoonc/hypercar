@@ -247,111 +247,20 @@ class SpikeShellService : ISpikeShell.Stub {
                     builderClass
                         .getMethod("setFlags", Int::class.javaPrimitiveType)
                         .invoke(builder, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC)
+                    // Android 16 没有把 Surface 传给 createVirtualDisplay 的重载：Surface 必须写进 config。
+                    builderClass
+                        .getMethod("setSurface", Surface::class.java)
+                        .invoke(builder, surface)
                     builderClass
                         .getMethod("setDisplayIdToMirror", Int::class.javaPrimitiveType)
                         .invoke(builder, sourceDisplayId)
                     val config = builderClass.getMethod("build").invoke(builder)
-                    // 反射签名在三星上不稳定（有 (VirtualDisplayConfig, Handler, Callback) 等同名重载），
-                    // 这里按参数类型挑出所有 (VirtualDisplayConfig, Surface, ...) 变体逐个尝试。
-                    val methods = dm.javaClass.methods.filter {
-                        it.name == "createVirtualDisplay" &&
-                            it.parameterTypes.firstOrNull()?.name == "android.hardware.display.VirtualDisplayConfig" &&
-                            it.parameterTypes.getOrNull(1)?.name == "android.view.Surface"
-                    }
-                    val sig = dm.javaClass.methods.filter { it.name == "createVirtualDisplay" }
-                        .joinToString(" | ") { m -> m.parameterTypes.joinToString(",", "(", ")") { it.name } }
-                    var vd: VirtualDisplay? = null
-                    for (m in methods) {
-                        val extra = m.parameterTypes.size - 2
-                        if (extra < 1 || extra > 3) continue
-                        val args = arrayOfNulls<Any?>(m.parameterTypes.size)
-                        args[0] = config
-                        args[1] = surface
-                        vd = runCatching { m.invoke(dm, *args) as? VirtualDisplay }.getOrNull()
-                        if (vd != null) break
-                    }
-                    if (vd == null) return "ERR createVirtualDisplay 候选都失败: $sig"
-                    displays[vd.display.displayId] = vd
-                            displaySizes[vd.display.displayId] = Triple(width, height, dpi)
-                            flagsUsed = candidate
-                            // Trusted secondary displays still default to FALLBACK_DISPLAY on some ROMs.
-                            // Set this before launching any activity so search keyboards join the encoded display.
-                            val ime = ShellDisplayIme.configure(vd.display.displayId, candidate and trusted != 0)
-                            val msg = "OK id=${vd.display.displayId} flags=0x${candidate.toString(16)} package=$pkg ime=$ime"
-                            Log.i(TAG, "createDisplay $msg")
-                            SpikeReport.add("SHELL", "createDisplay $msg")
-                            return msg
-                        }
-                        Log.w(TAG, "createDisplay(pkg=$pkg) 返回 null，flags=0x${candidate.toString(16)}")
-                    } catch (t: Throwable) {
-                        lastError = t
-                        lastLabel = "pkg=$pkg flags=0x${candidate.toString(16)}"
-                        Log.w(TAG, "createDisplay $lastLabel 失败: $t")
-                    }
-                }
-            }
-            val stack = lastError?.stackTraceToString()?.take(1200).orEmpty()
-            return "ERR 全部失败（$lastLabel）: ${lastError?.javaClass?.name}: ${lastError?.message}\n$stack"
-        }
-    }
-
-    /**
-     * 把已有显示镜像到给定 Surface。系统「模拟辅助显示设备」（overlay display，type=OVERLAY）
-     * 会被三星 DeX 当成桌面显示器，点击图标就开自由窗口；而 shell 自建的 VIRTUAL 屏做不到。
-     */
-    override fun createMirrorDisplay(
-        owner: IBinder,
-        surface: Surface?,
-        width: Int,
-        height: Int,
-        dpi: Int,
-        sourceDisplayId: Int,
-    ): String {
-        val ctx = appContext ?: return "ERR 没有 Context"
-        if (surface == null) return "ERR surface=null"
-        if (sourceDisplayId < 0) return "ERR source=$sourceDisplayId"
-        synchronized(lock) {
-            if (!displayLease.bind(owner) { callback ->
-                    val death = IBinder.DeathRecipient { callback() }
-                    runCatching {
-                        owner.linkToDeath(death, 0)
-                        val unlink: () -> Unit = { runCatching { owner.unlinkToDeath(death, 0) } }
-                        unlink
-                    }.getOrNull()
-                }) return "ERR display owner disconnected"
-            var lastError: Throwable? = null
-            for (pkg in listOf("com.android.shell", "android")) {
-                val dm = runCatching {
-                    val ctor = DisplayManager::class.java.getDeclaredConstructor(Context::class.java)
-                    ctor.isAccessible = true
-                    ctor.newInstance(PackageOverrideContext(ctx, pkg)) as DisplayManager
-                }.getOrNull() ?: continue
-                try {
-                    val builderClass = Class.forName("android.hardware.display.VirtualDisplayConfig\$Builder")
-                    val builder = builderClass
-                        .getDeclaredConstructor(
-                            String::class.java,
-                            Int::class.javaPrimitiveType,
-                            Int::class.javaPrimitiveType,
-                            Int::class.javaPrimitiveType,
-                        )
-                        .apply { isAccessible = true }
-                        .newInstance("hypercar-dex-mirror", width, height, dpi)
-                    builderClass
-                        .getMethod("setFlags", Int::class.javaPrimitiveType)
-                        .invoke(builder, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC)
-                    builderClass
-                        .getMethod("setDisplayIdToMirror", Int::class.javaPrimitiveType)
-                        .invoke(builder, sourceDisplayId)
-                    val config = builderClass.getMethod("build").invoke(builder)
-                    // 必须精确匹配 (VirtualDisplayConfig, Surface, Callback)：
-                    // Samsung 上还有 (VirtualDisplayConfig, Handler, Callback) 等同名重载。
                     val create = dm.javaClass.methods.firstOrNull {
                         it.name == "createVirtualDisplay" && it.parameterTypes.size == 3 &&
-                            it.parameterTypes[0].name == "android.hardware.display.VirtualDisplayConfig" &&
-                            it.parameterTypes[1].name == "android.view.Surface"
-                    } ?: return "ERR 没有 createVirtualDisplay(VirtualDisplayConfig, Surface, Callback)"
-                    val vd = create.invoke(dm, config, surface, null) as? VirtualDisplay
+                            it.parameterTypes[0].name.endsWith("VirtualDisplayConfig") &&
+                            it.parameterTypes[1].name == "java.util.concurrent.Executor"
+                    } ?: return "ERR 没有 createVirtualDisplay(VirtualDisplayConfig, Executor, Callback)"
+                    val vd = create.invoke(dm, config, null, null) as? VirtualDisplay
                         ?: return "ERR createVirtualDisplay 返回 null"
                     displays[vd.display.displayId] = vd
                     displaySizes[vd.display.displayId] = Triple(width, height, dpi)
