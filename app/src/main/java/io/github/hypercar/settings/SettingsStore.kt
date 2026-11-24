@@ -326,6 +326,9 @@ object SettingsStore {
     /** 是否系统自带 CarLife 模式（三星车联 / 荣耀车联等）。 */
     val systemCarLifeMode: Boolean get() = carSource == "system_carlife"
 
+    /** DeX 源：画面由三星 DeX 桌面渲染，走 Shizuku 虚拟屏 + 同一套编码链路。 */
+    val dexMode: Boolean get() = carSource == "dex"
+
     /** 任一由本机 CarLife 引擎提供画面的来源。 */
     val carLifeMode: Boolean get() = carWithMode || systemCarLifeMode
 

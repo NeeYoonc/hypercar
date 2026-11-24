@@ -25,6 +25,7 @@ import io.github.hypercar.bluetooth.DiscoverabilityHandoff
 import io.github.hypercar.bluetooth.SystemDiscoverabilityPrompt
 import io.github.hypercar.autowake.HyperCarService
 import io.github.hypercar.carui.CarUiCaster
+import io.github.hypercar.carui.DexCaster
 import io.github.hypercar.carui.MusicBridge
 import io.github.hypercar.core.AudioStats
 import io.github.hypercar.core.LinkState
@@ -307,6 +308,8 @@ object HyperCarRepo {
     @Volatile private var sessionCarWithMode = false
     /** 本轮会话是否走手机自带的系统 CarLife（三星车联 / 荣耀车联等）。 */
     @Volatile private var sessionSystemCarLife = false
+    /** 连接开始时冻结的 DeX 源标记：会话中改设置不影响本条链路。 */
+    @Volatile private var sessionSourceIsDex = false
     /** 本轮会话冻结的来源字符串，用于判断设置是否已切源。 */
     @Volatile private var sessionCarSource = "car_ui"
     /** 任一由本机 CarLife 引擎提供画面的来源。 */
@@ -845,6 +848,7 @@ object HyperCarRepo {
         sessionCarSource = SettingsStore.carSource
         sessionCarWithMode = SettingsStore.carWithMode
         sessionSystemCarLife = SettingsStore.systemCarLifeMode
+        sessionSourceIsDex = SettingsStore.dexMode
         hudSessionEnabled = true
         io.github.hypercar.navigation.NavigationSources.clear()
         sessionIdentity = null
@@ -1925,6 +1929,7 @@ object HyperCarRepo {
                         sessionUiJob = null
                     }
                     CarUiCaster.stopAsync()
+                    DexCaster.stopAsync()
                     MusicBridge.onCarDisconnected()
                     // Every failed activation consumes its invitation. CAS preserves a newer
                     // invitation arriving during negotiation, even from the same address.
@@ -2106,6 +2111,7 @@ object HyperCarRepo {
         sessionUiJob?.cancel()
         sessionUiJob = null
         CarUiCaster.stopAsync()
+        DexCaster.stopAsync()
         // 在解绑网络、结束蓝牙旧会话之前完成有界业务退出；断网/EOF 路径只强制清理。
         runCatching {
             if (graceful) log("SESSION-CLOSE: graceful completed=${RustCoreBridge.nativeStopGracefully()}")
@@ -3140,10 +3146,16 @@ object HyperCarRepo {
                             fun current() = sessionLive.get() && streaming && connectionAttemptId == diagnosticId &&
                                 engineCallbacks.current() == callbackOwner
                             if (!current()) return@launch
-                            val result = runCatching { CarUiCaster.start(ctx, ::current) }
-                                .getOrElse { "启动失败: ${it.javaClass.simpleName}: ${it.message}" }
-                            log("CARUI: $result")
-                            if (CarUiCaster.running) {
+                            val dex = SettingsStore.dexMode
+                            val result = runCatching {
+                                if (dex) DexCaster.start(ctx, ::current) else CarUiCaster.start(ctx, ::current)
+                            }.getOrElse { "启动失败: ${it.javaClass.simpleName}: ${it.message}" }
+                            log(if (dex) "DEX: $result" else "CARUI: $result")
+                            if (dex) {
+                                if (DexCaster.running) {
+                                    connectionDiagnostics.mark(diagnosticId, ConnectionDiagnostics.Stage.UI_STARTED)
+                                }
+                            } else if (CarUiCaster.running) {
                                 connectionDiagnostics.mark(diagnosticId, ConnectionDiagnostics.Stage.UI_STARTED)
                                 io.github.hypercar.navigation.AmapLinkProbe.start(ctx)
                                 CarUiCaster.monitor(ctx, diagnosticId, callbackOwner, ::current)
@@ -3186,7 +3198,8 @@ object HyperCarRepo {
         }
 
         override fun onForceKeyFrame() {
-            io.github.hypercar.carui.CarUiCaster.requestKeyFrame()
+            if (SettingsStore.dexMode) io.github.hypercar.carui.DexCaster.requestKeyFrame()
+            else io.github.hypercar.carui.CarUiCaster.requestKeyFrame()
         }
 
         override fun onDisplaySize(width: Int, height: Int) {
@@ -3217,7 +3230,10 @@ object HyperCarRepo {
             if (!sessionLive.get()) return
             val consoleKey = io.github.hypercar.carui.CarConsoleKey.fromInput(usage)
             if (consoleKey != null) {
-                if (!sessionCarLifeMode) io.github.hypercar.carui.CarUiCaster.onConsoleKey(consoleKey)
+                if (!sessionCarLifeMode) {
+                    if (sessionSourceIsDex) io.github.hypercar.carui.DexCaster.onConsoleKey(consoleKey)
+                    else io.github.hypercar.carui.CarUiCaster.onConsoleKey(consoleKey)
+                }
                 return
             }
             appContext()?.let { MusicBridge.onCarMediaKey(it, usage) }

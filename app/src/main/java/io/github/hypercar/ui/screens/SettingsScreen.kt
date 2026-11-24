@@ -1765,18 +1765,19 @@ fun CarSourceSection(
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     listOf(
                         "car_ui" to "自绘 UI",
+                        "dex" to "DeX",
                         "carwith" to "CarWith",
                         "system_carlife" to "系统 CarLife",
                     ).forEachIndexed { index, (source, label) ->
                         SegmentedButton(
                             selected = current == source,
                             enabled = !connected && when (source) {
-                                "car_ui" -> startup.shizukuReady
+                                "car_ui", "dex" -> startup.shizukuReady
                                 "carwith" -> startup.carWithInstalled
                                 else -> true
                             },
                             onClick = { selectSource(source) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 3),
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 4),
                             label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                         )
                     }
@@ -1786,6 +1787,7 @@ fun CarSourceSection(
                     connected -> "断开连接后可切换画面来源。"
                     current == "system_carlife" ->
                         "用手机自带的百度 CarLife 出画面（三星车联 / 荣耀车联）。选好后在它的「无线连接」页停住，本应用接管本机端口。"
+                    current == "dex" -> "把三星 DeX 桌面放到虚拟屏上推给车机：需要 Shizuku，桌面与多窗口由 DeX 自己渲染。"
                     current == "carwith" -> "CarWith 画面按车机屏幕自动换算并按需拉伸，源画面最高 2560×2560，无需手动设置。"
                     !startup.shizukuReady -> "自绘 UI 需先在「权限与后台」完成 Shizuku 授权。"
                     else -> "自绘 UI 使用下方显示设置。"
