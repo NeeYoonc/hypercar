@@ -484,12 +484,14 @@ object SettingsStore {
             append("\"touch_display_w\":").append(tdW).append(",")
             append("\"touch_display_h\":").append(tdH).append(",")
             append("\"fps\":").append(plan.fps).append(",")
-            append("\"enable_audio\":true,")
-            append("\"carwith_microphone\":").append(carWithSource).append(",")
+            append("\"enable_audio\":").append(profile.airplayAudioEnabled).append(",")
+            // Public CarLife+ keeps its phone microphone, as in the reference.
+            // The existing Xiaomi car-microphone bridge remains unchanged.
+            append("\"carwith_microphone\":").append(profile.airplayAudioEnabled && carWithSource && !systemCarLifeSource).append(",")
             append("\"video_codec\":\"").append(VideoCodecPolicy.forHardware(videoCodec, VideoHardwareCapabilities.hevcEncoderAvailable)).append("\",")
             append("\"bmw_capabilities\":").append(profile.protocolProfileId.startsWith("bmw_")).append(",")
             append("\"audio_codec\":\"").append(audioCodec).append("\",")
-            append("\"self_microphone_asr\":").append(carVoiceRecognition && !carWithMode).append(",")
+            append("\"self_microphone_asr\":").append(profile.airplayAudioEnabled && carVoiceRecognition && !carWithSource).append(",")
             append("\"keep_alive_stats\":").append(keepAliveStats).append(",")
             append("\"request_receiver_stats\":").append(debugLogEnabled).append(",")
             append("\"bmw_box_bootstrap\":").append(io.github.hypercar.headunit.ReceiverCompatibility.useBmwBootstrap(
