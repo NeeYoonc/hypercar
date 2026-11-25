@@ -2651,6 +2651,9 @@ object HyperCarRepo {
         wifiStationSnapshot = null
         sessionProfile = null
         appContext()?.let { io.github.hypercar.carui.MusicNotificationListener.sync(it) }
+        // Shizuku user service（`:spike`，约 58 MB）不必长期常驻：会话拆完后给它一个
+        // 「闲置 3 分钟即解绑」的截止时间；期间再连会自动顺延，需要时 connect() 重新绑。
+        io.github.hypercar.spike.SpikeShell.noteSessionEnded()
     }
 
     // ---------------------------------------------------------------- WiFi

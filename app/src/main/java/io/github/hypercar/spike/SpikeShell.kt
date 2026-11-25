@@ -10,6 +10,8 @@ import android.view.MotionEvent
 import io.github.hypercar.BuildConfig
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
@@ -31,6 +33,12 @@ object SpikeShell {
     private var args: Shizuku.UserServiceArgs? = null
     private val bindMutex = Mutex()
     private val displayOwner = Binder()
+    private val idleScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.Default,
+    )
+
+    /** 最近一次真正使用 shell 的单调时间；给「会话结束后闲置即解绑」用。 */
+    @Volatile private var lastUseMs = 0L
     @Volatile var isBinding: Boolean = false
         private set
 
@@ -130,6 +138,7 @@ object SpikeShell {
     /** 绑定（幂等）。返回人话结果，写进 spike 报告。 */
     suspend fun connect(context: Context): String {
         return bindMutex.withLock {
+            touch()
             if (isConnected()) return@withLock "已连接"
             // 上一次绑定的 binder 已死（App 进程被系统回收、Shizuku 重启等）：先解绑再加。
             if (connection != null) disconnect()
@@ -238,9 +247,40 @@ object SpikeShell {
     fun consoleKey(displayId: Int, keyCode: Int, metaState: Int): String =
         call("consoleKey") { it.consoleKey(displayId, keyCode, metaState) }
 
-    private inline fun call(name: String, block: (ISpikeShell) -> String): String =
-        runCatching { service?.let(block) ?: "ERR 未连接" }.getOrElse {
+    private inline fun call(name: String, block: (ISpikeShell) -> String): String {
+        touch()
+        return runCatching { service?.let(block) ?: "ERR 未连接" }.getOrElse {
             "ERR $name ${it.javaClass.simpleName}: ${it.message}"
         }
+    }
 
+    private fun touch() {
+        lastUseMs = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * 会话彻底结束（不再保活监听）时调用一次：给 `:spike` 定一个「闲置即解绑」的截止时间。
+     *
+     * user service 进程常驻约 58 MB；会话结束后 App 往往只是切到后台，进程就一直留着。
+     * 这里在 [IDLE_UNBIND_AFTER_MS] 后复查：期间只要有任何 shell 使用（connect/call）就
+     * 自动顺延，真正需要时 connect() 会重新绑。
+     */
+    fun noteSessionEnded() {
+        touch()
+        idleScope.launch {
+            delay(IDLE_UNBIND_AFTER_MS)
+            // 正在 bind/unbind 就别插手，避免和 connect() 抢状态。
+            if (!bindMutex.tryLock()) return@launch
+            try {
+                val idleFor = android.os.SystemClock.elapsedRealtime() - lastUseMs
+                if (connection == null || idleFor < IDLE_UNBIND_AFTER_MS) return@launch
+                disconnect()
+                SpikeReport.add("SHELL", "闲置 ${idleFor / 1000}s，已解绑 user service")
+            } finally {
+                bindMutex.unlock()
+            }
+        }
+    }
+
+    private const val IDLE_UNBIND_AFTER_MS = 3 * 60_000L
 }

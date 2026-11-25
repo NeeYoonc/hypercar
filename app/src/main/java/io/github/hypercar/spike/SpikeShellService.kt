@@ -34,6 +34,9 @@ class SpikeShellService : ISpikeShell.Stub {
     @Volatile private var splitCaptureRequested = false
     private val bluetoothDiscovery = ShellBluetoothDiscovery()
     private val wifiSelection = ShellWifiSelection()
+    private val createdAt = SystemClock.elapsedRealtime()
+    private val hostPid = java.util.concurrent.atomic.AtomicInteger(0)
+    private val hostStartTicks = java.util.concurrent.atomic.AtomicLong(-1L)
 
     init {
         // 回收历史遗留的 user service 进程：App 被强制停止/覆盖安装时，Shizuku 不会自动
@@ -41,6 +44,10 @@ class SpikeShellService : ISpikeShell.Stub {
         // 这里在新进程构造时把除自己以外的同名进程收掉（同 UID，shell 有权 kill）。
         runCatching { reapStaleInstances() }
             .onFailure { Log.w(TAG, "回收遗留 spike 进程失败: $it") }
+        // 另一条保底：宿主 App 进程死掉后，Shizuku 的 `.daemon(false)` 在真机上并不可靠
+        // （实测残留 2h25m / RSS 58 MB / ppid=1），所以自己盯着宿主，宿主没了就退。
+        runCatching { startHostWatchdog() }
+            .onFailure { Log.w(TAG, "启动宿主看门狗失败: $it") }
     }
 
     private fun reapStaleInstances() {
@@ -61,6 +68,97 @@ class SpikeShellService : ISpikeShell.Stub {
     /** user service 进程的 cmdline 就是 `<packageName>:spike`，自己也是这个进程名。 */
     private fun packageNameOfSelf(): String =
         java.io.File("/proc/self/cmdline").readText().trim { it <= ' ' }.substringBefore(":spike")
+
+    /**
+     * 宿主（App 进程）看门狗。
+     *
+     * 为什么需要：`.daemon(false)` 只承诺「App 进程死了就回收 user service」，但真机上
+     * Shizuku 13.6 没做到——App 被覆盖安装后 `:spike` 仍以 shell uid 活着
+     * （ppid=1、2h25m、RSS 58 MB），每次 App 重启多一个，实测堆到过 20 个（约 1 GB）。
+     * 服务端唯一能自查的线索是调用方 pid，所以：第一次宿主调用时记下 pid 与
+     * /proc/<pid>/stat 的 starttime（防 pid 复用），之后每 20 s 校验，宿主没了就自杀。
+     */
+    // AIDL 生成的 Stub 把 onTransact 重写成了 public，这里必须保持 public。
+    override fun onTransact(
+        code: Int,
+        data: android.os.Parcel,
+        reply: android.os.Parcel?,
+        flags: Int,
+    ): Boolean {
+        runCatching { recordHostOnce() }
+        return super.onTransact(code, data, reply, flags)
+    }
+
+    private fun recordHostOnce() {
+        if (hostPid.get() != 0) return
+        val ctx = appContext ?: return
+        // 只认宿主 App 的 uid：Shizuku 服务端自己也可能发事务，别把它记成宿主。
+        if (android.os.Binder.getCallingUid() != ctx.applicationInfo.uid) return
+        val pid = android.os.Binder.getCallingPid()
+        if (pid <= 1 || pid == android.os.Process.myPid()) return
+        val ticks = readStartTicks(pid) ?: return
+        if (hostPid.compareAndSet(0, pid)) {
+            hostStartTicks.set(ticks)
+            Log.i(TAG, "WATCHDOG: 宿主 pid=$pid start=$ticks")
+        }
+    }
+
+    private fun startHostWatchdog() {
+        val watchdog = Thread({
+            while (true) {
+                try {
+                    Thread.sleep(HOST_WATCHDOG_INTERVAL_MS)
+                } catch (interrupted: InterruptedException) {
+                    break
+                }
+                val pid = hostPid.get()
+                if (pid == 0) {
+                    // 没有 Context 就永远记不到宿主，此时宁可留着也别误杀。
+                    if (appContext == null) continue
+                    // 刚创建、宿主还没发起第一次调用：给宽限，别误杀正在 bind 的进程。
+                    if (SystemClock.elapsedRealtime() - createdAt > HOST_WATCHDOG_GRACE_MS) {
+                        Log.w(TAG, "WATCHDOG: ${HOST_WATCHDOG_GRACE_MS / 1000}s 内没有宿主调用，退出")
+                        exitAfterHostGone("no-host")
+                        break
+                    }
+                    continue
+                }
+                if (!hostAlive(pid, hostStartTicks.get())) {
+                    Log.i(TAG, "WATCHDOG: 宿主 pid=$pid 已消失，回收本进程")
+                    exitAfterHostGone("host-gone")
+                    break
+                }
+            }
+        }, "hypercar-spike-watchdog")
+        watchdog.isDaemon = true
+        watchdog.start()
+        Log.i(
+            TAG,
+            "WATCHDOG: 启动 interval=${HOST_WATCHDOG_INTERVAL_MS}ms grace=${HOST_WATCHDOG_GRACE_MS}ms",
+        )
+    }
+
+    private fun hostAlive(pid: Int, startTicks: Long): Boolean {
+        val current = readStartTicks(pid) ?: return false
+        return startTicks < 0 || current == startTicks
+    }
+
+    /** /proc/<pid>/stat 的 starttime（第 22 个字段），解析见 [HostWatchdog]。 */
+    private fun readStartTicks(pid: Int): Long? = runCatching {
+        HostWatchdog.startTicks(java.io.File("/proc/$pid/stat").readText())
+    }.getOrNull()
+
+    private fun exitAfterHostGone(reason: String) {
+        // 先放掉虚拟屏（binder 事务，任何线程都可调用），再退出进程。
+        runCatching { synchronized(lock) { releaseDisplaysLocked() } }
+            .onFailure { Log.w(TAG, "WATCHDOG: 释放虚拟屏失败: $it") }
+        Log.i(TAG, "WATCHDOG: 退出 reason=$reason pid=${android.os.Process.myPid()}")
+        // 另起线程退出：killProcess 之后当前线程可能来不及刷日志。
+        Thread({
+            runCatching { android.os.Process.killProcess(android.os.Process.myPid()) }
+            kotlin.system.exitProcess(0)
+        }, "hypercar-spike-exit").start()
+    }
     override fun startWifiSelection(owner: IBinder, token: String, ssid: String, bssid: String, uid: Int): String {
         if (android.os.Binder.getCallingUid() != uid || appContext?.applicationInfo?.uid != uid)
             return "ERR Wi-Fi request owner mismatch"
@@ -872,6 +970,8 @@ override fun findOverlayDisplay(): Int {
 
     private companion object {
         private const val TAG = "HyperCar-SpikeShell"
+        private const val HOST_WATCHDOG_INTERVAL_MS = 20_000L
+        private const val HOST_WATCHDOG_GRACE_MS = 120_000L
         private val lock = Any()
         private var display: VirtualDisplay? = null
         private val displays = LinkedHashMap<Int, VirtualDisplay>()
