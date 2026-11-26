@@ -37,6 +37,8 @@ private fun MediaController.isPlayingPhoneMusic(context: Context, preferred: Str
 
 private fun MediaController.isLocalMusic(context: Context?, preferred: String?): Boolean {
     if (ShortVideoApps.isSupported(packageName)) return false
+    // 自己的静音保活会话（PlaybackKeeper）不是音乐播放器，别让它出现在车机音乐卡片里。
+    if (packageName == context?.packageName) return false
     val info = playbackInfo ?: return false
     if (info.playbackType != MediaController.PlaybackInfo.PLAYBACK_TYPE_LOCAL) return false
     return packageName == preferred || MusicApps.isKnownPlayer(packageName) ||

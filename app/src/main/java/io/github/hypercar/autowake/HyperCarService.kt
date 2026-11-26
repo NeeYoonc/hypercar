@@ -28,6 +28,22 @@ class HyperCarService : Service() {
     private var listeningOnly = false
     private var identityOnly = false
 
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var lastBeatMs = 0L
+    private val beat = object : Runnable {
+        override fun run() {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (lastBeatMs != 0L) {
+                val gap = now - lastBeatMs
+                if (gap >= FREEZE_GAP_MS) {
+                    Log.w(TAG, "FREEZE: 进程被系统挂起 ${gap}ms（心跳恢复；音频与保活都会出现缺口）")
+                }
+            }
+            lastBeatMs = now
+            mainHandler.postDelayed(this, FREEZE_BEAT_MS)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -98,6 +114,8 @@ class HyperCarService : Service() {
     }
 
     override fun onDestroy() {
+        stopFreezeWatch()
+        PlaybackKeeper.stop()
         isRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         releaseLocks()
@@ -115,18 +133,20 @@ class HyperCarService : Service() {
      * 至少保证会话能进前台（麦克风随后会在 AudioRecord 处再报一次原因）。
      */
     private fun startForegroundSafe() {
+        // 会话（非纯待机）先挂上静音音轨与 MediaSession，再进前台：mediaPlayback 类型要对应真实播放。
+        if (!listeningOnly) PlaybackKeeper.start(this)
         val micGranted = !listeningOnly &&
             androidx.core.content.ContextCompat.checkSelfPermission(
                 this,
                 android.Manifest.permission.RECORD_AUDIO,
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        val types =
-            if (android.os.Build.VERSION.SDK_INT >= 30 && micGranted) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            }
+        // mediaPlayback：会话期间同时挂静音音轨（PlaybackKeeper），让系统视作「正在播放媒体」，
+        // 避免锁屏瞬间被三星 Freecess 冻结（实测挂起 2.6s 会抽干音频缓冲并让 RTSP 保活漏拍）。
+        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        if (android.os.Build.VERSION.SDK_INT >= 30 && micGranted) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        }
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), types)
         } catch (t: Throwable) {
@@ -142,10 +162,28 @@ class HyperCarService : Service() {
                 Log.e(TAG, "startForeground 失败：${t2.message}")
             }
         }
+        startFreezeWatch()
+    }
+
+    /**
+     * 进程挂起检测。**治不了**挂起本身，只用来确认 PlaybackKeeper 是否真的挡住了 Freecess：
+     * 主线程每 500ms 一跳，用 elapsedRealtime（含休眠时间）算间隔；进程被冻结期间心跳不走，
+     * 恢复后第一跳就能看到几秒空档。日志出现 `FREEZE: ...` 就说明防冻结没收效。
+     */
+    private fun startFreezeWatch() {
+        lastBeatMs = 0L
+        mainHandler.removeCallbacks(beat)
+        mainHandler.postDelayed(beat, FREEZE_BEAT_MS)
+    }
+
+    private fun stopFreezeWatch() {
+        mainHandler.removeCallbacks(beat)
+        lastBeatMs = 0L
     }
 
     /** 息屏/WiFi 保活锁：CPU 唤醒锁维持会话线程与心跳；WiFi 低延迟锁避免激进省电断流。 */
     private fun acquireLocks() {
+        PlaybackKeeper.start(this)
         if (wakeLock?.isHeld == true && wifiLock?.isHeld == true) return
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HyperCar:session").apply {
@@ -160,6 +198,7 @@ class HyperCarService : Service() {
     }
 
     private fun releaseLocks() {
+        PlaybackKeeper.stop()
         runCatching { wakeLock?.release() }
         wakeLock = null
         runCatching { wifiLock?.release() }
@@ -211,6 +250,9 @@ class HyperCarService : Service() {
 
     companion object {
         private const val TAG = "HyperCarService"
+        /** 挂起检测心跳间隔；>1.2s 的空档视为被冻结/挂起（正常调度抖动仅几十毫秒）。 */
+        private const val FREEZE_BEAT_MS = 500L
+        private const val FREEZE_GAP_MS = 1_200L
         private const val NOTIFICATION_ID = 1
 
         /** 上车：车机 ACL 连上时（经 AutoStart.handler）拉起本服务。 */
