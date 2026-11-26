@@ -2281,7 +2281,7 @@ object HyperCarRepo {
                         sessionIdentity = identity
                         val identityPath = identity.file.absolutePath
                         val json = SettingsStore.engineConfigJson(apHostFinal, port, deviceMac, identityPath,
-                            receiverBluetoothMac = receiver, carWithSource = sessionCarWithMode,
+                            receiverBluetoothMac = receiver, carWithSource = sessionCarLifeMode,
                             receiverModel = coordinator.activePeerAddress?.takeIf { it.equals(receiver, ignoreCase = true) }
                                 ?.let { io.github.hypercar.iap2.Iap2Peer.modelFor(it) } ?: mdnsEndpoint?.model,
                             headUnitProfile = headUnitProfile,
@@ -3996,7 +3996,7 @@ object HyperCarRepo {
 
         override fun onViewAreaChoices(revision: Long, uuid: String, targets: IntArray) {
             io.github.hypercar.carui.CarDisplayLayout.viewAreaChoices.value =
-                if (sessionLive.get() && !sessionCarWithMode && targets.isNotEmpty())
+                if (sessionLive.get() && !sessionCarLifeMode && targets.isNotEmpty())
                     io.github.hypercar.carui.CarDisplayLayout.ViewAreaChoices(revision, uuid, targets.toList())
                 else null
         }
@@ -4004,7 +4004,7 @@ object HyperCarRepo {
         override fun onDisplayLayout(width: Int, height: Int, viewX: Int, viewY: Int, viewWidth: Int, viewHeight: Int,
                                      safeX: Int, safeY: Int, safeWidth: Int, safeHeight: Int, drawOutside: Boolean,
                                      statusBarEdge: Int, rightHandDrive: Boolean, allowsFocus: Boolean) {
-            if (!sessionCarWithMode) io.github.hypercar.carui.CarReceiverUi.setFocusTransferAllowed(allowsFocus)
+            if (!sessionCarLifeMode) io.github.hypercar.carui.CarReceiverUi.setFocusTransferAllowed(allowsFocus)
             io.github.hypercar.carui.CarDisplayLayout.state.value = io.github.hypercar.carui.DisplayLayout(
                 width, height,
                 io.github.hypercar.carui.DisplayRect(viewX, viewY, viewWidth, viewHeight),
@@ -4019,7 +4019,7 @@ object HyperCarRepo {
         }
 
         override fun onReceiverUi(kind: String, payload: String) {
-            if (!sessionCarWithMode) io.github.hypercar.carui.CarReceiverUi.handle(kind, payload)
+            if (!sessionCarLifeMode) io.github.hypercar.carui.CarReceiverUi.handle(kind, payload)
         }
 
         override fun onMediaKey(usage: Int) {
