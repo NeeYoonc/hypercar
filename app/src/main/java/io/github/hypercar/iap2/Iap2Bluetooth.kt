@@ -671,7 +671,13 @@ class Iap2Bluetooth(
                 // 会连带把 ACL 拽掉（车机反复重连），反而再也不发起 CarPlay。
                 if (!sessions.allowsOutbound(ticket) || !canStartSession()) break
                 val evidence = io.github.hypercar.session.PairingEvidence.read(appContext.filesDir, device.address)
-                if (profile.dropProfilesBeforeIap2 && evidence.mayDropProfiles) {
+                // CarLife（CarWith / 系统 CarLife+）会话中绝不动车机蓝牙配置文件：
+                // 断 HFP/A2DP 会把 ACL 一起拽掉，三星车联据此判定「已下车」并
+                // deInitAndRemoveCarlife + force-stop 高德，导航每次掉线都被杀
+                // （2026-11-26 实机取证，同 CarProfilePolicy.shouldGuard 的豁免）。
+                if (profile.dropProfilesBeforeIap2 && evidence.mayDropProfiles &&
+                    !io.github.hypercar.settings.SettingsStore.carLifeMode
+                ) {
                     // 注意：BtProfiles.disconnect 内部会打「自己断开」归因标记——断开
                     // 配置文件（个别 ROM 退到设备级断开）会让系统广播 ACL 断开，接收器
                     // 靠那个标记认出「这是我们干的」，不按「下车」拆会话。
@@ -689,7 +695,12 @@ class Iap2Bluetooth(
                     }
                 } else if (!profileDropSkippedLogged) {
                     profileDropSkippedLogged = true
-                    log("BT-C: 保留 HFP/A2DP：档案允许断开=${profile.dropProfilesBeforeIap2} 身份=${evidence.identityPresent} 本车凭证=${evidence.receiverCredentialPresent}；首配/未知状态不主动断配置文件")
+                    val why = if (io.github.hypercar.settings.SettingsStore.carLifeMode) {
+                        "CarLife 会话保留车机蓝牙（断开会让三星车联拆除导航）"
+                    } else {
+                        "首配/未知状态不主动断配置文件"
+                    }
+                    log("BT-C: 保留 HFP/A2DP：档案允许断开=${profile.dropProfilesBeforeIap2} 身份=${evidence.identityPresent} 本车凭证=${evidence.receiverCredentialPresent}；$why")
                 }
                 val socket = tryConnect(device, ticket)
                 if (socket != null) {

@@ -2551,6 +2551,20 @@ mod display_size_tests {
         assert_eq!(stream.get("spf").and_then(Value::as_int), Some(352));
         assert_eq!(stream.get("audioFormat").and_then(Value::as_int), Some(1 << 15));
         assert_eq!(stream.get("streamConnectionID").and_then(Value::as_int), Some(42));
+        // The receiver clocks the RTP timeline from these; without sr it falls back
+        // to the 44.1 kHz packet size and plays a 48 kHz stream fast.
+        assert_eq!(stream.get("ct").and_then(Value::as_int), Some(1));
+        assert_eq!(stream.get("sr").and_then(Value::as_int), Some(48_000));
+    }
+
+    #[test]
+    fn pcm_441_setup_declares_its_own_rate() {
+        let body = bplist::parse(&build_audio_setup_for_codec(7, 300, AudioCodec::Pcm441)).unwrap();
+        let stream = &body.get("streams").unwrap().as_array().unwrap()[0];
+        assert_eq!(stream.get("audioFormat").and_then(Value::as_int), Some(1 << 11));
+        assert_eq!(stream.get("ct").and_then(Value::as_int), Some(1));
+        assert_eq!(stream.get("sr").and_then(Value::as_int), Some(44_100));
+        assert_eq!(stream.get("spf").and_then(Value::as_int), Some(352));
     }
     #[tokio::test(start_paused = true)]
     async fn carwith_media_init_orders_only_declared_matching_output_rates() {
@@ -3697,10 +3711,10 @@ fn build_audio_setup_request(conn_id: i64, latency_ms: i64, codec: AudioCodec, s
         ("supportsRTPPacketRedundancy", Value::bool(false)),
         ("spf", Value::int(codec.spf())),
     ];
-    // Leave the validated PCM proposal unchanged. AAC explicitly describes compression/rate.
-    if matches!(codec.stream_type(), 102 | 103) {
-        stream.extend([("ct", Value::int(codec.compression_type())), ("sr", Value::int(codec.rate().into()))]);
-    }
+    // Always describe compression and sample rate. Receivers that only see spf 352
+    // assume the 44.1 kHz packet size and then clock a 48 kHz stream 8.8% fast;
+    // the working reference senders declare ct/sr for PCM as well.
+    stream.extend([("ct", Value::int(codec.compression_type())), ("sr", Value::int(codec.rate().into()))]);
     if let Some(port) = control_port {
         stream.push(("controlPort", Value::int(i64::from(port))));
         if high_accuracy { stream.push(("supportsHighAccuracyTimestamps", Value::bool(true))); }

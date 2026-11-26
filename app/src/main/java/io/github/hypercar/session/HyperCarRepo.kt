@@ -1317,6 +1317,7 @@ object HyperCarRepo {
     private fun updateCarProfileGuard(context: Context) {
         if (io.github.hypercar.bluetooth.CarProfilePolicy.shouldGuard(
                 headUnitProfile.dropProfilesBeforeIap2, automaticConnectionAllowed, hasCurrentSession,
+                carLifeSession = SettingsStore.carLifeMode,
             )) CarProfileGuard.start(context, ::log)
         else CarProfileGuard.stop()
     }
@@ -3820,9 +3821,22 @@ object HyperCarRepo {
         private var activationGeneration = 0L
         private var activationKey = ""
         private var activationReports = 0
+        private var audioReadyGeneration = -1L
+        private var audioReadySeen = false
         @Synchronized override fun onPipeline(json: String) {
             val next = io.github.hypercar.core.PipelineDiagnostics.parse(json) ?: return
             if (!sessionLive.get() || proactiveActivation.get()?.rejected == true) return
+            // CarWith / 系统 CarLife+ 路线 keepAudio=true，从不启动 CarAudioCapture，
+            // 于是 MusicBridge 永远收不到「音频就绪」⇒ 断连时暂停的音乐重连后不会续播。
+            // 这里用核心上报的 audio_SETUP 状态做一次 false→true 边沿，补齐这条路线的信号。
+            if (next.generation != audioReadyGeneration) {
+                audioReadyGeneration = next.generation
+                audioReadySeen = false
+            }
+            if (next.audioReady && !audioReadySeen) {
+                audioReadySeen = true
+                MusicBridge.onCarAudioReady()
+            }
             if (next.writtenFrames > 0 && next.videoChannelReady && next.recordAccepted &&
                 next.videoStream == "READY" && next.generation > closedPipelineGeneration.get() &&
                 next.generation >= _snapshots.value.pipeline.generation) {
@@ -4871,6 +4885,8 @@ object HyperCarRepo {
      * 导出的也只是崩溃前的旧内容。落盘后重启会把上一轮的尾部带回环形缓冲。
      */
     private var diskLogWriter: java.io.BufferedWriter? = null
+    /** 外部存储镜像：`/sdcard/Android/data/<pkg>/files/hypercar-session.log`，adb 可直接 tail，免 root。 */
+    private var diskLogMirror: java.io.BufferedWriter? = null
     private val diskLogLock = Any()
 
     /** 打开（必要时先把上一份转成 .1）内部日志文件；失败返回 null，不影响界面日志。 */
@@ -4888,6 +4904,15 @@ object HyperCarRepo {
                 java.io.FileOutputStream(file, true).bufferedWriter()
             }.getOrNull() ?: return null
             diskLogWriter = writer
+            runCatching {
+                val external = appCtx?.getExternalFilesDir(null)
+                if (external != null) {
+                    diskLogMirror?.close()
+                    val mirror = java.io.File(external, DISK_LOG_NAME)
+                    if (mirror.length() > DISK_LOG_MAX_BYTES) mirror.delete()
+                    diskLogMirror = java.io.FileOutputStream(mirror, true).bufferedWriter()
+                }
+            }
             return writer
         }
     }
@@ -4900,6 +4925,11 @@ object HyperCarRepo {
                 writer.write(line)
                 writer.newLine()
                 writer.flush()
+            }
+            runCatching {
+                diskLogMirror?.let { mirror ->
+                    mirror.write(line); mirror.newLine(); mirror.flush()
+                }
             }
         }
     }
@@ -5158,11 +5188,11 @@ object HyperCarRepo {
     /** 重试轮里的单次连接超时（比首轮短，避免窗口被几轮超时吃光）。 */
     private const val AIRPLAY_CONNECT_RETRY_TIMEOUT_MILLIS = 1_200L
 
-    /** 环形日志保留行数（诊断页展示 + 导出）。 */
-    private const val LOG_KEEP_LINES = 1600
+    /** 环形日志保留行数（诊断页展示 + 导出）。1600 行在车内十几秒就被刷掉，够不到一次故障。 */
+    private const val LOG_KEEP_LINES = 12_000
 
     /** 单行日志限流：窗口内最多落盘次数。 */
-    private const val LOG_RATE_MAX = 4
+    private const val LOG_RATE_MAX = 12
     private const val LOG_RATE_WINDOW_MILLIS = 10_000L
 
     /** 限流表容量上限（超过就清空重建，避免长跑后无限增长）。 */
@@ -5172,7 +5202,7 @@ object HyperCarRepo {
     private const val DISK_LOG_NAME = "hypercar-session.log"
 
     /** 落盘日志超过这个大小就转存成 `.1`（只留一份上一代）。 */
-    private const val DISK_LOG_MAX_BYTES = 1_500_000L
+    private const val DISK_LOG_MAX_BYTES = 12_000_000L
 
     private fun prepareCarWithSource(context: Context, diagnosticId: Long, deviceMac: String, wakePeer: String?): Boolean {
         fun current() = sessionLive.get() && carWithEntries.current(diagnosticId)
@@ -5237,7 +5267,7 @@ object HyperCarRepo {
     }
 
     /** 重启时从落盘日志带回环形缓冲的行数（够覆盖崩溃前的一段现场）。 */
-    private const val DISK_LOG_TAIL_LINES = 400
+    private const val DISK_LOG_TAIL_LINES = 2_000
 
     /**
      * CarWith 模式入口（2026-11-03）。

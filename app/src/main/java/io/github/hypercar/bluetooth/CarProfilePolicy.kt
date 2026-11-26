@@ -12,9 +12,22 @@ package io.github.hypercar.bluetooth
  * 两次 iAP2 都没被打开；成功那次（11:07:16）没有 HFP 先行。
  */
 object CarProfilePolicy {
-    /** 手动会话也需要档案策略；关闭自动模式只结束空闲时的干预。 */
-    fun shouldGuard(dropProfilesBeforeIap2: Boolean, autoConnect: Boolean, hasCurrentSession: Boolean): Boolean =
-        dropProfilesBeforeIap2 && (autoConnect || hasCurrentSession)
+    /**
+     * 手动会话也需要档案策略；关闭自动模式只结束空闲时的干预。
+     *
+     * **CarLife 会话（CarWith / 系统 CarLife+）一律不拦截**（2026-11-26 实机取证）：
+     * 拦截会反复断开车机的 HFP/A2DP，车机（或 ROM）随后整条 ACL 一起拆，三星车联
+     * `com.samsung.android.carlink` 把「蓝牙没了」当成下车，`deInitAndRemoveCarlife`
+     * 销毁整套 CarLife 显示栈并 `Force stopping com.autonavi.minimap`，导航因此每次
+     * 掉线都被连根拔掉。CarLife 场景需要车机蓝牙常在线（它同时承担 HFP 通话与车联
+     * 的存在感），所以这里彻底不动它。
+     */
+    fun shouldGuard(
+        dropProfilesBeforeIap2: Boolean,
+        autoConnect: Boolean,
+        hasCurrentSession: Boolean,
+        carLifeSession: Boolean = false,
+    ): Boolean = dropProfilesBeforeIap2 && (autoConnect || hasCurrentSession) && !carLifeSession
 
     /** 同一地址两次强制断开的最小间隔：太密会和车机 ACL 重连互相打架。 */
     const val MIN_INTERVAL_MILLIS = 3_000L
