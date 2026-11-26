@@ -86,4 +86,8 @@ interface ISpikeShell {
     /** Copy only the focused native AMap card's UID-owned layers into the caller's bounded RGBA buffer. */
     int[] captureInstrumentMap(IBinder owner, int displayId, int width, int height,
                                int maxWidth, int maxHeight, in SharedMemory pixels);
+
+    ParcelFileDescriptor openCallAudio(IBinder owner, long token, String callId, int rate);
+    void closeCallAudio(long token);
+    String activeCallAudioIdentity();
 }

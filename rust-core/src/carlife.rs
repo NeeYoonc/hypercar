@@ -21,7 +21,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc, watch, Notify};
 
 use crate::engine::CarLifeEvent;
 use crate::emit_log;
@@ -194,8 +194,13 @@ pub(crate) struct DialStop {
     retired: Mutex<bool>,
     signal: Arc<Notify>,
     diagnostic_phase: Arc<DiagnosticPhase>,
+    video_rate_failure: watch::Sender<Option<u32>>,
 }
 impl DialStop {
+    pub(crate) fn report_video_rate_failure(&self, fps: u32) {
+        self.video_rate_failure.send_replace(Some(fps));
+    }
+
     pub(crate) fn cancel(&self) {
         *self.retired.lock() = true;
         self.signal.notify_waiters();
@@ -256,6 +261,8 @@ static LAST_DIALER: Mutex<Option<tokio::task::JoinHandle<()>>> = Mutex::new(None
 pub struct CarLifeHub {
     stop: Arc<DialStop>,
     touch_tx: mpsc::UnboundedSender<QueuedControl>,
+    /// 系统自带 CarLife（明文协议）没有 CarWith 硬键通道，电话键直接丢弃。
+    phone_keys_blocked: bool,
     /// 当前编码分辨率共享单元（与 AirPlay 协商/触摸换算共用）。
     encoder_size: Arc<Mutex<(u32, u32)>>,
     keyframe_request: Arc<Notify>,
@@ -405,7 +412,7 @@ impl CarLifeHub {
                 tokio::select! { biased; _=stop.cancelled()=>return, _=tokio::time::sleep(Duration::from_secs(1))=>{} }
             }
         }));
-        Ok((Self {stop:hub_stop,touch_tx,encoder_size,keyframe_request},event_rx))
+        Ok((Self {stop:hub_stop,touch_tx,phone_keys_blocked:!cfg.content_encryption,encoder_size,keyframe_request},event_rx))
     }
 
     pub fn request_keyframe(&self) {
@@ -444,6 +451,22 @@ impl CarLifeHub {
     pub fn voice_start(&self) {
         let queued = self.queue_hard_key(0x21, Duration::from_secs(2));
         emit_log(&format!("VOICE-KEY: CarWith key=0x21 queued={queued} (not recognition confirmation)"));
+    }
+
+    pub fn handle_phone_key(&self, key: u32) {
+        let code = match key {
+            crate::consumer_hid::PHONE_HOOK => 2,
+            crate::consumer_hid::PHONE_DROP => 3,
+            _ => return,
+        };
+        // Only the explicitly selected CarWith 4.1 source has no system voice target.
+        // SystemAuto can probe that dialect too; it still must not gain phone control.
+        if self.phone_keys_blocked {
+            emit_log(&format!("PHONE-KEY: usage=0x{key:x} dropped source=system-carlife"));
+            return;
+        }
+        let queued = self.queue_hard_key(code, Duration::from_secs(1));
+        emit_log(&format!("PHONE-KEY: usage=0x{key:x} CarWith key={code} queued={queued} (execution unconfirmed)"));
     }
 
     pub fn handle_console_key(&self, key: u32) -> bool {
@@ -1049,7 +1072,7 @@ mod input_lease_tests {
     fn hub() -> (Arc<CarLifeHub>, mpsc::UnboundedReceiver<QueuedControl>) {
         let (touch_tx, rx) = mpsc::unbounded_channel();
         (Arc::new(CarLifeHub {
-            stop: Arc::new(DialStop::default()), touch_tx, encoder_size: Arc::new(Mutex::new((1920, 720))),
+            stop: Arc::new(DialStop::default()), touch_tx, phone_keys_blocked: false, encoder_size: Arc::new(Mutex::new((1920, 720))),
             keyframe_request: Arc::new(Notify::new()),
         }), rx)
     }

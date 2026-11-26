@@ -177,6 +177,14 @@ pub(crate) fn replay(owner:u64) {
     }
 }
 
+/// 视频泵降档后把实际帧率回报给本轮 CarLife 会话（用于 CMD 侧速率反馈）。
+pub(crate) fn report_video_rate_failure(owner: u64, fps: u32) {
+    let slot = SOURCE.lock();
+    if let Some(source) = slot.current.as_ref().filter(|source| source.owner == owner) {
+        source.stop.report_video_rate_failure(fps);
+    }
+}
+
 pub(crate) fn request_fresh_video(owner: u64) {
     let slot = SOURCE.lock();
     if let Some(source) = slot.current.as_ref().filter(|source| source.owner == owner) {

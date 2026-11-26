@@ -50,6 +50,11 @@ object SpikeShell {
     fun startSplitAudioCapture(owner: IBinder, navigationUid: Int): Array<android.os.ParcelFileDescriptor>? =
         service?.startSplitAudioCapture(owner, navigationUid)
     fun stopAudioCapture() { service?.stopAudioCapture() }
+    fun activeCallAudioIdentity(): String? = service?.activeCallAudioIdentity()
+
+    fun openCallAudio(owner: IBinder, token: Long, callId: String, rate: Int): android.os.ParcelFileDescriptor? =
+        service?.openCallAudio(owner, token, callId, rate)
+    fun closeCallAudio(token: Long) { service?.closeCallAudio(token) }
     fun audioCaptureStatus(): String = service?.audioCaptureStatus() ?: "shell disconnected"
     fun startBluetoothDiscoverable(owner: IBinder, token: String, seconds: Int): String =
         call("startBluetoothDiscoverable") { it.startBluetoothDiscoverable(owner, token, seconds) }
