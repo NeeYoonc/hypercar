@@ -2,11 +2,11 @@
 
 让 Android 手机连接无线 CarPlay 车机，将地图、音乐和应用画面送到车机屏幕，并转发声音与触摸操作。支持 **自绘车机 UI** 和 **小米 CarWith** 两种画面来源，无需 root。
 
-[下载 APK](https://github.com/fw867/hypercar/releases/latest) · [使用与开发文档](docs/README.md) · [验证范围](docs/VALIDATION.md) · [反馈问题](https://github.com/fw867/hypercar/issues)
+[下载 APK](https://github.com/NeeYoonc/hypercar/releases/latest) · [使用与开发文档](docs/README.md) · [验证范围](docs/VALIDATION.md) · [反馈问题](https://github.com/NeeYoonc/hypercar/issues)
 
 ## 注意事项
 
-1. **反馈问题请附上故障现场日志。** 在 [GitHub Issues](https://github.com/fw867/hypercar/issues) 提交反馈时，请完整描述故障现象，包括 App 版本、车机型号与档案、画面来源、复现步骤和具体报错。故障发生后，请立即从 HyperCar 的「诊断」页导出txt日志，并附在 Issue 中。无完整日志的Issues无法定位故障会直接关闭。
+1. **反馈问题请附上故障现场日志。** 在 [GitHub Issues](https://github.com/NeeYoonc/hypercar/issues) 提交反馈时，请完整描述故障现象，包括 App 版本、车机型号与档案、画面来源、复现步骤和具体报错。故障发生后，请立即从 HyperCar 的「诊断」页导出txt日志，并附在 Issue 中。无完整日志的Issues无法定位故障会直接关闭。
 2. **宝马二次上车提示连接失败时，可保留配对重连。** 在车机的「移动设备」设置中点击「连接新设备」，等列表出现手机名称后，点选该手机。这一步可触发车机重新发送 CarPlay 邀请，车机和手机都无需删除原有配对记录。
 
 ## 主要功能
@@ -53,7 +53,7 @@ CarWith 是否可用取决于系统是否提供该组件，不仅取决于手机
 
 ## 首次使用
 
-1. 从 [Releases](https://github.com/fw867/hypercar/releases/latest) 下载 APK 安装，打开 HyperCar，按首页引导授予附近设备、通知等必需权限。Android 12 / 12L 还需定位权限与定位服务。
+1. 从 [Releases](https://github.com/NeeYoonc/hypercar/releases/latest) 下载 APK 安装，打开 HyperCar，按首页引导授予附近设备、通知等必需权限。Android 12 / 12L 还需定位权限与定位服务。
 2. **明确选择画面来源**。自绘 UI 必须先完成 Shizuku 授权；未安装时，App 提供下载入口。CarWith 需检测到可用系统组件。条件满足后才允许开始连接。
 3. 在「我的车机」选择合适档案和目标车机，完成系统蓝牙配对，并在车机侧选择该手机、确认 Apple CarPlay 授权。部分车机首次需要手动加入车机 Wi-Fi。
 4. 自绘 UI 使用前，先在手机地图、音乐 App 中完成初始化。音乐封面和控制需授予系统「通知使用权」。

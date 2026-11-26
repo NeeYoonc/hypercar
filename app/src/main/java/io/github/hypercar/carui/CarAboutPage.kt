@@ -1,4 +1,4 @@
-﻿@file:Suppress("DEPRECATION")   // Icons.Rounded.ArrowBack 建议换 AutoMirrored 版，本文件暂保留
+@file:Suppress("DEPRECATION")   // Icons.Rounded.ArrowBack 建议换 AutoMirrored 版，本文件暂保留
 package io.github.hypercar.carui
 
 import android.graphics.Bitmap
@@ -71,6 +71,7 @@ fun CarAboutPage(modifier: Modifier = Modifier, onBack: () -> Unit) {
             AboutRow("版本", BuildConfig.VERSION_NAME)
             AboutRow("版本号", BuildConfig.VERSION_CODE.toString())
             AboutRow("作者", context.getString(R.string.app_author))
+            AboutRow("维护者", context.getString(R.string.app_maintainer))
             AboutRow("项目", context.getString(R.string.app_repo))
             AboutRow("包名", context.packageName)
         }

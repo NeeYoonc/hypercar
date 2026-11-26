@@ -38,7 +38,7 @@ sealed interface UpdateUiState {
 
 object UpdateCenter {
 
-    private const val API = "https://api.github.com/repos/fw867/hypercar/releases/latest"
+    private const val API = "https://api.github.com/repos/NeeYoonc/hypercar/releases/latest"
     private const val PREFS = "hypercar_update"
     private const val KEY_LAST_CHECK = "last_check_at"
     private const val KEY_DISMISSED = "dismissed_tag"
