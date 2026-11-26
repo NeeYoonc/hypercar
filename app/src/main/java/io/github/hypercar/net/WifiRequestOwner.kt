@@ -9,6 +9,8 @@ internal object WifiRequestOwner {
         return capabilities.isNotEmpty() && !capabilities.substringBefore(" Forbidden:").split('&').contains("INTERNET") &&
             line.contains("SSID Match pattern=PatternMatcher{LITERAL: $ssid}") &&
             Regex("RequestorUid: $uid(?: |])").containsMatchIn(line) &&
-            Regex("RequestorPkg: io\\.github\\.hypercar(?: |])").containsMatchIn(line)
+            // 必须跟运行期 applicationId 对齐：改包名后 dumpsys 里的 RequestorPkg 也会变。
+            Regex("RequestorPkg: " + Regex.escape(io.github.hypercar.BuildConfig.APPLICATION_ID) + "(?: |])")
+                .containsMatchIn(line)
     }
 }

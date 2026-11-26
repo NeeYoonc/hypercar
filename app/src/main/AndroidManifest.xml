@@ -135,7 +135,7 @@
             android:name=".carui.DexWarmupActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:taskAffinity="io.github.hypercar.dexwarmup"
+            android:taskAffinity="${applicationId}.dexwarmup"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- P1：音乐卡片的数据源。需要用户在系统设置里授予「通知使用权」。 -->

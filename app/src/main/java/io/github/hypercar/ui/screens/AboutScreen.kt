@@ -88,14 +88,14 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 // Enlarge only the artwork inside the badge, keeping its outer bounds clipped.
                 Image(
                     painter = painterResource(R.drawable.ic_launcher_glyph),
-                    contentDescription = "HyperCar 标志",
+                    contentDescription = "HyperCar+ 标志",
                     modifier = Modifier.fillMaxSize().scale(1.55f),
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(
-                    text = "HyperCar",
+                    text = "HyperCar+",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontFamily = FontFamily.Monospace,
                     ),

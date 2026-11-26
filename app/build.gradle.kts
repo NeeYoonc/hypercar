@@ -26,7 +26,9 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.hypercar"
+        // applicationId 才是安装身份：换掉它才能和上游 HyperCar 并存、不撞签名。
+        // Kotlin 包名（namespace）仍保留 io.github.hypercar：JNI 类型签名、AIDL 与 900+ 处 import 都依赖它。
+        applicationId = "io.github.neeyoonc.hypercarplus"
         // minSdk 31：静默连车机热点（cmd wifi connect-network）与 FGS connectedDevice
         // 豁免链路在 Android 12+ 才完整；HyperOS4（Android 17/SDK 37）向下兼容。
         minSdk = 31

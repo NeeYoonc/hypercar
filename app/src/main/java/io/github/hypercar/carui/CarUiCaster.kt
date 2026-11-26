@@ -359,7 +359,8 @@ object CarUiCaster {
         }
         displayId = id
         displayService = boundService
-        val component = "io.github.hypercar/" + CarHomeActivity::class.java.name
+        // 用运行期包名拼组件名：applicationId 改成 io.github.neeyoonc.hypercarplus 后仍指向本应用。
+        val component = context.packageName + "/" + CarHomeActivity::class.java.name
         val launch = SpikeDisplay.amStartComponentOnDisplay(id, component, clearTask = false)
         if (!launch.contains(" → exit=0 ")) {
             stopLocked(keepAudio)

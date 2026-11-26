@@ -489,7 +489,7 @@ private fun StatusStrip(link: LinkState, modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "HyperCar",
+            text = "HyperCar+",
             style = MaterialTheme.typography.titleSmall.copy(
                 letterSpacing = 2.sp,
                 fontFamily = FontFamily.Monospace,

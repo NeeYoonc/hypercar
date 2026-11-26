@@ -245,7 +245,7 @@ jobs:
             echo "APK 内 libhypercar_core.so 已确认"
           fi
 
-          NAME="HyperCar-${VERSION}-release.apk"
+          NAME="HyperCarPlus-${VERSION}-release.apk"
           cp "$APK" "$NAME"
           SHA=$(sha256sum "$NAME" | cut -d' ' -f1)
           SIZE=$(du -h "$NAME" | cut -f1)
