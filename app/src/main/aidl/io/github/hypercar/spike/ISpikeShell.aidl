@@ -90,4 +90,5 @@ interface ISpikeShell {
     ParcelFileDescriptor openCallAudio(IBinder owner, long token, String callId, int rate);
     void closeCallAudio(long token);
     String activeCallAudioIdentity();
+    String callAudioStatus();
 }
