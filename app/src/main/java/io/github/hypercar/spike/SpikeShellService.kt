@@ -162,11 +162,11 @@ class SpikeShellService : ISpikeShell.Stub {
             kotlin.system.exitProcess(0)
         }, "hypercar-spike-exit").start()
     }
-    override fun startWifiSelection(owner: IBinder, token: String, ssid: String, bssid: String, uid: Int): String {
+    override fun startWifiSelection(owner: IBinder, token: String, ssid: String, bssid: String, uid: Int, protocolFrequency: Int): String {
         if (android.os.Binder.getCallingUid() != uid || appContext?.applicationInfo?.uid != uid)
             return "ERR Wi-Fi request owner mismatch"
         val identity = android.os.Binder.clearCallingIdentity()
-        return try { wifiSelection.start(owner, token, ssid, bssid, uid) }
+        return try { wifiSelection.start(owner, token, ssid, bssid, uid, protocolFrequency) }
         finally { android.os.Binder.restoreCallingIdentity(identity) }
     }
     override fun stopWifiSelection(token: String): String {
