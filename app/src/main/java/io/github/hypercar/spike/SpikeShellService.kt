@@ -43,6 +43,9 @@ class SpikeShellService : ISpikeShell.Stub {
         // 回收上一次绑定的 `:spike` 进程，它们各自缓存旧 SharedPreferences 并互相覆盖设置。
         // 这里在新进程构造时把除自己以外的同名进程收掉（同 UID，shell 有权 kill）。
         runCatching { reapStaleInstances() }
+        // 兜底：上一次会话可能把物理面板电源停在 OFF（adb 无法恢复，只能重启手机），
+        // 进程一起来就把它恢复成正常，绝不主动关屏。
+        runCatching { setPhysicalScreenPower(true) }
             .onFailure { Log.w(TAG, "回收遗留 spike 进程失败: $it") }
         // 另一条保底：宿主 App 进程死掉后，Shizuku 的 `.daemon(false)` 在真机上并不可靠
         // （实测残留 2h25m / RSS 58 MB / ppid=1），所以自己盯着宿主，宿主没了就退。
@@ -241,8 +244,30 @@ class SpikeShellService : ISpikeShell.Stub {
         flags: Int,
         name: String,
     ): String {
-        val ctx = appContext ?: return "ERR 没有 Context"
         if (surface == null) return "ERR surface=null"
+        return createDisplayInternal(owner, surface, width, height, dpi, flags, name)
+    }
+
+    /** 不带输出面：屏只负责托管 DeX 桌面，实际画面由 createMirrorDisplay 缩放送进编码器。 */
+    override fun createBareDisplay(
+        owner: IBinder,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        flags: Int,
+        name: String,
+    ): String = createDisplayInternal(owner, null, width, height, dpi, flags, name)
+
+    private fun createDisplayInternal(
+        owner: IBinder,
+        surface: Surface?,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        flags: Int,
+        name: String,
+    ): String {
+        val ctx = appContext ?: return "ERR 没有 Context"
         // 关键：Android 17 的 DisplayManagerService 会校验 packageName 与调用 uid 的包列表。
         // UserService 的 uid 是 shell(2000)，Context 却是宿主 App 的（io.github.hypercar）→
         //   SecurityException: packageName must match the owner uid

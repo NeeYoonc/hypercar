@@ -11,6 +11,13 @@ interface ISpikeShell {
     /** 返回 "OK id=<n> flags=0x<hex>" 或 "ERR ..."。 */
     String createDisplay(IBinder owner, in Surface surface, int width, int height, int dpi, int flags, String name);
 
+    /**
+     * 建一块「不带输出面」的公共虚拟屏：只用来托管 DeX 桌面（按渲染分辨率布局），
+     * 再由 createMirrorDisplay 把它的图层栈缩放送进编码器 surface。
+     * 超采样必须走这条路——直接给屏灌小尺寸 surface 时合成器不缩放，画面会被裁掉一块。
+     */
+    String createBareDisplay(IBinder owner, int width, int height, int dpi, int flags, String name);
+
     /** 把已有显示（例如系统叠加视图）镜像到给定 Surface，用于把 DeX 桌面送进编码器。 */
     String createMirrorDisplay(IBinder owner, in Surface surface, int width, int height, int dpi, int sourceDisplayId);
 

@@ -127,6 +127,17 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.HyperCar" />
 
+        <!-- DeX 暖机：建叠加屏的同一瞬间由 shell `am start` 在这个屏上造一个新任务，
+             触发 SystemUI 的 Desk（AOSP 桌面窗口化）激活。Desk 暖起来之后窗口才有
+             桌面标题栏（齿轮+⌄ → 向左对齐/向右对齐）；否则退回通用 freeform 标题栏。
+             全透明、不参与最近任务，Desk 激活后自己结束。见 DexWarmupActivity 注释。 -->
+        <activity
+            android:name=".carui.DexWarmupActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="io.github.hypercar.dexwarmup"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- P1：音乐卡片的数据源。需要用户在系统设置里授予「通知使用权」。 -->
         <service
             android:name=".carui.MusicNotificationListener"

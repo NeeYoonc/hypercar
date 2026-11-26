@@ -1,4 +1,4 @@
-﻿package io.github.hypercar.settings
+package io.github.hypercar.settings
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -297,6 +297,16 @@ object SettingsStore {
     var dexRenderWidth: Int
         get() = p().getInt("dex_render_width", 2560).coerceIn(0, 4096)
         set(v) = p().edit().putInt("dex_render_width", v.coerceIn(0, 4096)).apply()
+
+    /** DeX 建屏方式（仅 DeX 画面源）：
+     *  · "virtual"（默认）—— shell 自建 VirtualDisplay，屏的输出面就是编码器（超采样时经 SurfaceScaler
+     *    下采样）。手机主屏没有任何预览窗，代价是窗口只能用通用 freeform 标题栏（没有左/右半屏入口）。
+     *  · "overlay" —— 系统叠加视图（模拟辅助显示设备）+ 镜像屏。DeX 100% 原生（原生标题栏含
+     *    左半屏/右半屏、任务栏、贴边），代价是手机屏左上角必然有一块叠加视图预览小窗（无 root 关不掉）。
+     */
+    var dexWindowRoute: String
+        get() = p().getString("dex_window_route", "virtual") ?: "virtual"
+        set(v) = p().edit().putString("dex_window_route", if (v == "overlay") "overlay" else "virtual").apply()
 
     /** 车机画面来源：
      *  · "car_ui"         —— 本 App 自绘车机首页（地图卡 + 音乐卡 + Dock）

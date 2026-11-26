@@ -210,6 +210,17 @@ object SpikeShell {
         service?.createDisplay(displayOwner, surface, width, height, dpi, flags, name) ?: "ERR 未连接"
     }.getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }
 
+    /** 不带输出面的宿主屏：只托管 DeX 桌面，画面由 createMirrorDisplay 缩放送进编码器。 */
+    fun createBareDisplay(
+        width: Int,
+        height: Int,
+        dpi: Int,
+        flags: Int = 0,
+        name: String = "hypercar-dex",
+    ): String = runCatching {
+        service?.createBareDisplay(displayOwner, width, height, dpi, flags, name) ?: "ERR 未连接"
+    }.getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }
+
     fun releaseDisplay(): String = runCatching {
         service?.releaseDisplay() ?: "ERR 未连接"
     }.getOrElse { "ERR ${it.javaClass.simpleName}: ${it.message}" }

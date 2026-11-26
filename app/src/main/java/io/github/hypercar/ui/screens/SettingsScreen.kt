@@ -1305,6 +1305,7 @@ private fun ResolutionSection() {
     var heightText by rememberSaveable { mutableStateOf(SettingsStore.videoHeight.toString()) }
     var fps by rememberSaveable { mutableStateOf(SettingsStore.videoFps) }
     var dexRender by rememberSaveable { mutableStateOf(SettingsStore.dexRenderWidth) }
+    var dexRoute by rememberSaveable { mutableStateOf(SettingsStore.dexWindowRoute) }
     var videoCodec by rememberSaveable { mutableStateOf(SettingsStore.videoCodec) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel(text = "分辨率与帧率")
@@ -1377,6 +1378,24 @@ private fun ResolutionSection() {
             }
             Text("只在「画面来源 = DeX」时生效：DeX 按该宽度渲染，再降采样到车机画布。" +
                 "越大越清晰也越吃 GPU，跟随画布等于关闭超采样。",
+                style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("DeX 建屏方式（下次连接生效）",
+                style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Spacer(modifier = Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                listOf("virtual" to "自建虚拟屏", "overlay" to "叠加视图").forEachIndexed { index, (value, label) ->
+                    SegmentedButton(
+                        selected = dexRoute == value,
+                        onClick = { dexRoute = value; SettingsStore.dexWindowRoute = value },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text("自建虚拟屏：手机主屏没有预览小窗，但 DeX 窗口是通用标题栏（没有左/右半屏入口）。" +
+                "叠加视图：DeX 100% 原生（原生标题栏含左半屏/右半屏、任务栏、贴边），" +
+                "但手机屏左上角会有一块预览小窗，无 root 关不掉。",
                 style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Spacer(modifier = Modifier.height(12.dp))
             Text("视频编码（下次连接生效）", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
